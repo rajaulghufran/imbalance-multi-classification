@@ -12,22 +12,23 @@ st.set_page_config(
 st.markdown(
     """
         <div style='text-align: center;'>
-            <h3>
-                EMOTION ANALYSIS ON IMBALANCE DATASET OF INDONESIAN EMOTIONAL TEXTS<br>
-                USING CLASS WEIGHTED SUPPORT VECTOR MACHINES
-            </h3>
-            <h3>WEB APPLICATION INTERFACE</h3>
-            <h3>
+            <h2>
+                EMOTION ANALYSIS ON IMBALANCE DATASET OF<br>
+                INDONESIAN EMOTIONAL TEXTS USING CLASS<br>
+                WEIGHTED SUPPORT VECTOR MACHINES
+            </h2>
+            <h2>WEB APPLICATION INTERFACE</h2>
+            <h2>
                 MUHAMMAD RAJAUL GHUFRAN<br>
                 161402142
-            </h3>
+            </h2>
             <br>
         </div>
     """,
     unsafe_allow_html=True
 )
 
-cols=st.columns([4.75, 2.5, 4.75])
+cols=st.columns([5.25, 1.5, 5.25])
 
 with cols[1]:
     st.image(
@@ -39,13 +40,13 @@ st.markdown(
     """
         <div style='text-align: center;'>
             <br>
-            <h3>
+            <h2>
                 PROGRAM STUDI S1 TEKNOLOGI INFORMASI<br>
                 FAKULTAS ILMU KOMPUTER DAN TEKNOLOGI INFORMASI<br>
                 UNIVERSITAS SUMATERA UTARA<br>
                 MEDAN<br>
                 2023
-            </h3>
+            </h2>
         </div>
     """,
     unsafe_allow_html=True
