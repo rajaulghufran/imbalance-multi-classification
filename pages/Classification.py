@@ -1,12 +1,11 @@
 from csv import Sniffer
 from io import StringIO
 from PIL import Image
-from time import sleep
 
 import pandas as pd
 import streamlit as st
 
-from util import delete_state
+from util import delete_state, init_state, instantiate_classification
 
 def read_dataset() -> None:
     if st.session_state["uploaded_dataset"] is None:
@@ -29,7 +28,22 @@ def read_dataset() -> None:
 
         st.session_state["df"] = df
 
-def classify(tfidf_vect_hyperparams, cw_svm_hyperparams) -> None:
+def restore_dtype(x):
+    x = x.replace(" ","")
+
+    try:
+        if '(' in x:
+            return tuple(restore_dtype(y) for y in x.replace("(","").replace(")","").split(","))
+
+        if '.' in x:
+            return float(x) 
+
+        return int(x)
+
+    except:
+        return x
+
+def classify(tfidfvectorizer_hyperparameters, svc_hyperparameters) -> None:
     if any(
         st.session_state[key] == "Select a column"
         for key in [
@@ -42,21 +56,26 @@ def classify(tfidf_vect_hyperparams, cw_svm_hyperparams) -> None:
         delete_state("classification.alert.error")
 
         with st.spinner("Classifying..."):
-            for i in range(1, 10, 1):
-                sleep(1)
+            for k, v in tfidfvectorizer_hyperparameters.items():
+                val = tuple(restore_dtype(x) for x in v[v.notnull()])
+                st.session_state["clf"].set_param_grid_attr(f'tfidfvectorizer__{k}', val)
 
-default_tfidf_vect_hyperparams = {
-    "norm": ["l1", "l2"],
-    "ngram_range": [(1, 1), (1, 2), (1,3)],
-    "min_df": [1, 3, 5, 10],
-    "max_df": [0.2, 0.4, 0.6, 0.8, 1.0],
-}
+            for k, v in svc_hyperparameters.items():
+                val = tuple(restore_dtype(x) for x in v[v.notnull()])
+                st.session_state["clf"].set_param_grid_attr(f'svc__{k}', val)
 
-default_cw_svm_hyperparams = {
-    "kernel": ["linear","rbf"],
-    "C": [0.01, 0.1, 1, 10, 100, 1000],
-    "gamma": [0.0001, 0.001, 0.01, 0.1, 1]
-}
+            X = list(st.session_state["df"][st.session_state["classification.texts"]])
+            y = list(st.session_state["df"][st.session_state["classification.targets"]])
+
+            X_cleaned = st.session_state["clf"].clean(X)
+            X_tokenized = st.session_state["clf"].tokenize(X_cleaned)
+            X_train, X_test, y_train, y_test = st.session_state["clf"].train_test_split(X_tokenized, y)
+            best_hyperparameters = st.session_state["clf"].tuning(X_train, y_train)[0]
+            # model = st.session_state["clf"].train(X_train, y_train, best_hyperparameters)
+            # y_pred = st.session_state["clf"].test(model, X_test)
+            # _, mcc = st.session_state["clf"].score(y_test, y_pred)
+
+            # print(mcc)
 
 st.set_page_config(
     page_title=("Classification"),
@@ -75,6 +94,8 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+
+init_state("clf", instantiate_classification())
 
 st.title("Dataset")
 
@@ -121,21 +142,20 @@ if "df" in st.session_state:
             
         st.markdown("### [TF-IDF Vectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html)")
 
-        tfidf_vect_hyperparams = st.experimental_data_editor(
+        tfidfvectorizer_hyperparameters = st.experimental_data_editor(
             pd.DataFrame.from_dict(
-                default_tfidf_vect_hyperparams,
-                orient="index",
-                dtype="string"
+                st.session_state["clf"].get_params("tfidfvectorizer", val_to_str=True),
+                orient="index"
             ).transpose(),
             use_container_width=True,
             num_rows="dynamic"
         )
 
-        st.markdown("### [CW-SVM](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
+        st.markdown("### [SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
 
-        cw_svm_hyperparams = st.experimental_data_editor(
+        svc_hyperparameters = st.experimental_data_editor(
             pd.DataFrame.from_dict(
-                default_cw_svm_hyperparams,
+                st.session_state["clf"].get_params("svc", val_to_str=True),
                 orient="index"
             ).transpose(),
             use_container_width=True,
@@ -145,12 +165,12 @@ if "df" in st.session_state:
         st.form_submit_button(
             "Classify",
             on_click=classify,
-            args=(tfidf_vect_hyperparams, cw_svm_hyperparams),
+            args=(tfidfvectorizer_hyperparameters, svc_hyperparameters),
             type="secondary"
         )
 
 st.divider()
 
-st.session_state
+# st.session_state
 
-st.divider()
+# st.divider()

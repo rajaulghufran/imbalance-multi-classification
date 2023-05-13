@@ -1,6 +1,8 @@
-from typing import Dict, List
+from typing import Dict
 
 import streamlit as st
+
+from pipeline.classification import Classification
 
 def init_state(name: str, val: any) -> None:
     if name not in st.session_state:
@@ -17,3 +19,7 @@ def delete_state(name: str) -> None:
 def delete_states(d: Dict[str, any]) -> None:
     for key, value in d.items():
         delete_state(key, value)
+
+@st.cache_resource
+def instantiate_classification():
+    return Classification()
