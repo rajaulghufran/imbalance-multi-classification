@@ -2,8 +2,9 @@ import re
 from time import time
 
 import stanza
+from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import confusion_matrix, make_scorer, matthews_corrcoef
+from sklearn.metrics import make_scorer, accuracy_score, matthews_corrcoef
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.pipeline import Pipeline
@@ -12,8 +13,16 @@ from sklearnex.model_selection import train_test_split
 from sklearnex.svm import SVC
 from tqdm import tqdm
 
-from .stop_words import STOP_WORDS
+from .assets.emoticons import EMOTICON_PATTERNS
+from .assets.stop_words import STOP_WORDS
+from .assets.sub_patterns import SUB_PATTERNS_1, SUB_PATTERNS_2
 # from .usm_ndarray_transformer import USMndarrayTransformer
+
+POS = {
+    "tags": ["ADJ","ADP","ADV","AUX","CONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"],
+    "descriptions": ["adjective","adposition","adverb","auxiliary","conjunction","determiner","interjection","noun","numeral","particle","pronoun","proper noun","punctuation","subordinating conjunction","symbol","verb","other"],
+    "examples": ["salah, pertama, besar","di, pada, dari","juga, lebih, kemudian","adalah, akan, dapat","dan, atau, tetapi","ini, itu, buah","Hai, Oh, Sayang","tahun, orang, desa","satu, dua, 1","tidak, kah, lah","yang, dia, mereka","Indonesia, kabupaten, kecamatan",", ? ()","untuk, bahwa, dengan","%, =, °","menjadi, merupakan, memiliki", "and, image, in"]
+}
 
 def dummy_fun(x):
     return x
@@ -64,22 +73,36 @@ class Classification:
     def set_param_grid_attr(self, key, val):
         self.param_grid.update({key: val})
 
-    #TODO:
     def clean(self, X):
         X_cleaned = []
 
         for x in tqdm(X, desc="Text cleaning"):
-            text = x
-            text = re.sub("\s{2,}", " ", text)
+            string = x
 
-            X_cleaned.append(text)
+            # normalize unicode to ascii, replace any char to its ascii form or remove it
+            # remove emoji
+            string = strip_accents_ascii(string)
+
+            for pattern, repl in SUB_PATTERNS_1:
+                string = re.sub(pattern, repl, string, flags=re.IGNORECASE)
+
+            # remove emoticons
+            string = EMOTICON_PATTERNS.sub("", string)
+
+            for pattern, repl in SUB_PATTERNS_2:
+                string = re.sub(pattern, repl, string, flags=re.IGNORECASE)
+
+            X_cleaned.append(string.strip())
 
         return X_cleaned
 
-    def tokenize(self, X_cleaned):
+    def tokenize(self, X_cleaned, selected_pos=None):
         X_tokenized = []
 
         docs = self.tokenizer.bulk_process(X_cleaned)
+
+        if selected_pos is None:
+            selected_pos = POS["tags"].copy()
 
         for doc in tqdm(docs, desc="Lemmatization"):
             doc_lemma = []
@@ -87,7 +110,8 @@ class Classification:
             for sentence in doc.sentences:
                 for token in sentence.tokens:
                     for word in token.words:
-                        doc_lemma.append(word.lemma)
+                        if word.pos in selected_pos:
+                            doc_lemma.append(word.lemma)
 
             X_tokenized.append(doc_lemma)
 
@@ -133,6 +157,6 @@ class Classification:
     
     def score(self, y_test, y_pred):
         return (
-            confusion_matrix(y_test, y_pred),
+            accuracy_score(y_test, y_pred),
             matthews_corrcoef(y_test, y_pred)
         )
