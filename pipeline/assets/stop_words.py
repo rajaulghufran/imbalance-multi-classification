@@ -118,5 +118,3 @@ waduh wah wahai waktu waktunya walau walaupun wong
 yaitu yakin yakni yang
 """.split()
 )
-
-STOP_WORDS |= {'-', 'a', 'b', 'c', 'd', 'e', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'w', 'y'}
