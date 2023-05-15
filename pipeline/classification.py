@@ -28,10 +28,11 @@ def dummy_fun(x):
     return x
 
 class Classification:
-    def __init__(self):
-        stanza.download("id")
+    def __init__(self, n_jobs=1, target_offload="auto"):
+        stanza.download(lang="id")
 
-        self.tokenizer = stanza.Pipeline("id", processors="tokenize,mwt,pos,lemma", use_gpu=True)
+        self.n_jobs=n_jobs
+        self.target_offload=target_offload
 
         self.param_grid = {
             "tfidfvectorizer__norm": ("l1", "l2"),
@@ -97,9 +98,11 @@ class Classification:
         return X_cleaned
 
     def tokenize(self, X_cleaned, selected_pos=None):
+        tokenizer = stanza.Pipeline("id", processors="tokenize,mwt,pos,lemma", use_gpu=True)
+
         X_tokenized = []
 
-        docs = self.tokenizer.bulk_process(X_cleaned)
+        docs = tokenizer.bulk_process(X_cleaned)
 
         if selected_pos is None:
             selected_pos = POS["tags"].copy()
@@ -131,14 +134,14 @@ class Classification:
             estimator=self.create_pipeline(),
             param_grid=self.param_grid,
             scoring=make_scorer(matthews_corrcoef),
-            n_jobs=-1,
+            n_jobs=self.n_jobs,
             cv=StratifiedShuffleSplit(n_splits=10, test_size=.2, random_state=42),
             verbose=3
         )
 
         start = time()
 
-        with config_context(target_offload="auto"):
+        with config_context(target_offload=self.target_offload):
             grid_search.fit(X_train, y_train)
 
         estimation = time() - start
@@ -149,7 +152,7 @@ class Classification:
         pipeline = self.create_pipeline()
         pipeline.set_params(**hyperparams)
 
-        with config_context(target_offload="auto"):
+        with config_context(target_offload=self.target_offload):
             return pipeline.fit(X_train, y_train)
     
     def test(self, model: Pipeline, X_test):
