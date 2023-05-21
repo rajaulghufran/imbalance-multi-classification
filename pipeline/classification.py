@@ -1,173 +1,210 @@
-import re
+import pickle
+from collections.abc import Iterable
 from datetime import datetime
+from pathlib import Path
+from tempfile import mkdtemp
 from time import time
+from typing import Dict, List, Literal, Tuple, Union
 
-import stanza
-from sklearn.feature_extraction.text import strip_accents_ascii
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import make_scorer, accuracy_score, matthews_corrcoef
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.pipeline import Pipeline
+from sklearn.utils.validation import check_is_fitted
+from sklearn.exceptions import NotFittedError
 from sklearnex import config_context
 from sklearnex.model_selection import train_test_split
 from sklearnex.svm import SVC
 
-from .emoticons import EMOTICON_PATTERNS
-from .stop_words import STOP_WORDS
-from .sub_patterns import SUB_PATTERNS_1, SUB_PATTERNS_2
+from .document_transformer import DocumentTransformer
+from .pos_filter import POSFilter
+from .stopword_removal import StopWordRemoval
+from .text_cleaning import TextCleaning
+from .tokenize_mwt_pos_lemma import TokenizeMWTPOSLemma
 # from .usm_ndarray_transformer import USMndarrayTransformer
 
-DEFAULT_POS = ["ADJ","ADP","ADV","AUX","CONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"]
-DEFAULT_PARAM_GRID = [
-    {
-        "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
-        "tfidfvectorizer__min_df": (1, 3, 5, 10),
-        "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
-        "svc__kernel": ("linear",),
-        "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000)
-    },
-    {
-        "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
-        "tfidfvectorizer__min_df": (1, 3, 5, 10),
-        "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
-        "svc__kernel": ("rbf",),
-        "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000),
-        "svc__gamma": (0.0001, 0.001, 0.01, 0.1, 1)
-    }
-]
-
-def dummy_fun(x):
-    return x
+def fun(arg):
+    return arg
 
 class Classification:
-    def __init__(self, n_jobs=1, target_offload="auto", verbose=1):
-        stanza.download(lang="id")
+    def __init__(self) -> None:
+        cachedir = mkdtemp()
 
-        self.n_jobs=n_jobs
-        self.target_offload=target_offload
-        self.verbose=verbose
+        self.text_preprocessing_pipeline: Pipeline = Pipeline(
+            [
+                ("text_cleaning", TextCleaning()),
+                ("tokenize_mwt_pos_lemma", TokenizeMWTPOSLemma())
+            ],
+            memory=cachedir
+        )
 
-    def create_pipeline(self):
+        self.feature_selection_pipeline: Pipeline = Pipeline(
+            [
+                ("pos_filter", POSFilter()),
+                ("stopword_removal", StopWordRemoval()),
+                ("document_transformer", DocumentTransformer())
+            ],
+            memory=cachedir
+        )
+
         tfidfvectorizer_hyperparameters = {
+            "encoding": "ascii",
+            "decode_error": "ignore",
             "strip_accents": "ascii",
-            "lowercase": True,
-            "preprocessor": dummy_fun,
-            "tokenizer": dummy_fun,
+            "preprocessor": fun,
+            "tokenizer": fun,
             "analyzer": "word",
-            "token_pattern": None
+            "token_pattern": None,
         }
 
-        return Pipeline([
-            ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
-            # ("usm_ndarray_transformer", USMndarrayTransformer()),
-            ("svc", SVC(class_weight="balanced", decision_function_shape='ovo', random_state=42)),
-        ])
+        svc_hyperparameters = {
+            "class_weight": "balanced",
+            "decision_function_shape": "ovo",
+            "random_state": 42
+        }
 
-    def clean(self, X):
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: TEXT CLEANING')
+        self.classification_pipeline: Pipeline = Pipeline(
+            [
+                ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
+                # ("usm_ndarray_transformer", USMndarrayTransformer()),
+                ("svc", SVC(**svc_hyperparameters)),
+            ],
+            memory=cachedir
+        )
 
-        X_cleaned = []
+    def get_model_attrs(self):
+        pos_filter = self.feature_selection_pipeline.named_steps["pos_filter"]
+        stopword_removal = self.feature_selection_pipeline.named_steps["stopword_removal"]
+        tfidfvectorizer = self.classification_pipeline.named_steps["tfidfvectorizer"]
+        svc = self.classification_pipeline.named_steps["svc"]
 
-        for x in X:
-            string = x
+        attrs = {
+            "pos_filter__pos": pos_filter.pos,
+            "stopword_removal__stopwords": set(stopword_removal.stopwords),
+            "tfidfvectorizer__ngram_range": tfidfvectorizer.ngram_range,
+            "tfidfvectorizer__min_df": tfidfvectorizer.min_df,
+            "tfidfvectorizer__max_df": tfidfvectorizer.max_df,
+            "tfidfvectorizer__stop_words": tfidfvectorizer.stop_words_,
+            "tfidfvectorizer__vocabulary": tfidfvectorizer.vocabulary_,
+            "svc__kernel": svc.kernel,
+            "svc__C": svc.C
+        }
 
-            # normalize unicode to ascii, replace any char to its ascii form or remove it
-            # remove emoji
-            string = strip_accents_ascii(string)
+        if svc.kernel == "rbf":
+            attrs["svc__gamma"] = svc.gamma
 
-            for pattern, repl in SUB_PATTERNS_1:
-                string = re.sub(pattern, repl, string, flags=re.IGNORECASE)
+        return attrs
 
-            # remove emoticons
-            string = EMOTICON_PATTERNS.sub("", string)
-
-            for pattern, repl in SUB_PATTERNS_2:
-                string = re.sub(pattern, repl, string, flags=re.IGNORECASE)
-
-            X_cleaned.append(string.strip())
-
-        return X_cleaned
-
-    def tokenize(self, X_cleaned, pos=None):
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: LOAD TOKENIZER', flush=True)
-
-        tokenizer = stanza.Pipeline("id", processors="tokenize,mwt,pos,lemma", use_gpu=True)
-
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: TOKENIZATION')
-
-        X_tokenized = []
-
-        docs = tokenizer.bulk_process(X_cleaned)
-
-        if pos is None:
-            pos = DEFAULT_POS
-
-        for doc in docs:
-            doc_lemma = []
-
-            for sentence in doc.sentences:
-                for token in sentence.tokens:
-                    for word in token.words:
-                        if word.pos in pos:
-                            lemma = word.lemma
-
-                            if lemma not in STOP_WORDS:
-                                doc_lemma.append(lemma)
-
-            X_tokenized.append(doc_lemma)
-
-        return X_tokenized
-
-    def train_test_split(self, X_tokenized, y):
+    def train_test_split(
+            self,
+            X: Iterable,
+            y: Iterable,
+            test_size: float = .2
+    ) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
         return train_test_split(
-            X_tokenized,
+            X,
             y,
-            test_size=.2,
+            test_size=test_size,
             random_state=42,
             stratify=y
         )
 
-    def tuning(self, X_train, y_train, param_grid=None):
+    def tuning(
+        self,
+        X_train: Iterable,
+        y_train: Iterable,
+        param_grid: Union[None, List[Dict[str, any]]] = None,
+        n_jobs: int = 1,
+        verbose: Literal[1, 2, 3] = 1
+    ) -> Tuple[GridSearchCV, float]:
         if param_grid is None:
-            param_grid = DEFAULT_PARAM_GRID
-
+            param_grid = [
+                {
+                    "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
+                    "tfidfvectorizer__min_df": (1, 3, 5, 10),
+                    "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
+                    "svc__kernel": ("linear",),
+                    "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000)
+                },
+                {
+                    "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
+                    "tfidfvectorizer__min_df": (1, 3, 5, 10),
+                    "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
+                    "svc__kernel": ("rbf",),
+                    "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000),
+                    "svc__gamma": (0.0001, 0.001, 0.01, 0.1, 1)
+                }
+            ]
+            
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: HYPER-PARAMETERS TUNING')
 
         grid_search = GridSearchCV(
-            estimator=self.create_pipeline(),
+            estimator=self.classification_pipeline,
             param_grid=param_grid,
             scoring=make_scorer(matthews_corrcoef),
-            n_jobs=self.n_jobs,
-            cv=StratifiedShuffleSplit(n_splits=10, test_size=.2, random_state=42),
-            verbose=self.verbose
+            n_jobs=n_jobs,
+            cv=StratifiedShuffleSplit(n_splits=5, test_size=.2, random_state=42),
+            verbose=verbose
         )
 
-        start = time()
+        t0 = time()
 
-        with config_context(target_offload=self.target_offload):
+        with config_context(target_offload="auto", allow_fallback_to_host=True):
             grid_search.fit(X_train, y_train)
 
-        estimation = time() - start
+        return (grid_search, time() - t0)
 
-        return(grid_search, estimation)
+    def train(self, X_train: Iterable, y_train: Iterable) -> None:
+        X_train = self.text_preprocessing_pipeline.transform(X_train)
+        X_train = self.feature_selection_pipeline.transform(X_train)
 
-    def train(self, X_train, y_train, hyperparams):
+        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TRAINING')
+        with config_context(target_offload="auto", allow_fallback_to_host=True):
+            self.classification_pipeline.fit(X_train, y_train)
+
+    def train_preprocessed(self, X_train: Iterable, y_train: Iterable) -> None:
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TRAINING')
 
-        pipeline = self.create_pipeline()
-        pipeline.set_params(**hyperparams)
-
-        with config_context(target_offload=self.target_offload):
-            return pipeline.fit(X_train, y_train)
+        with config_context(target_offload="auto", allow_fallback_to_host=True):
+            self.classification_pipeline.fit(X_train, y_train)
     
-    def test(self, model: Pipeline, X_test):
+    def test(self, X_test: Iterable) -> Iterable[int]:
+        X_test = self.text_preprocessing_pipeline.transform(X_test)
+        X_test = self.feature_selection_pipeline.transform(X_test)
+
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TESTINIG')
-
-        return model.predict(X_test)
+        return self.classification_pipeline.predict(X_test)
     
-    def score(self, y_test, y_pred):
+    def test_preprocessed(self, X_test: Iterable) -> Iterable[int]:
+        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TESTINIG')
+        return self.classification_pipeline.predict(X_test)
+    
+    def score(self, y_test: Iterable, y_pred: Iterable):
         return (
             accuracy_score(y_test, y_pred),
             matthews_corrcoef(y_test, y_pred)
         )
+    
+    def is_fitted(self) -> bool:
+        try:
+            check_is_fitted(self.classification_pipeline.named_steps["tfidfvectorizer"], ["vocabulary_"])
+            check_is_fitted(self.classification_pipeline.named_steps["svc"], ["classes_"])
+            return True
+
+        except NotFittedError:
+            return False
+    
+    def to_bytes(self) -> bytes:
+        return pickle.dumps((self.feature_selection_pipeline, self.classification_pipeline))
+    
+    def to_disk(self, dirpath: Path) -> None:
+        with open(dirpath / f'model.{datetime.now().strftime("%Y.%m.%d.%H.%M.%S.%f")}.pickle', "wb") as f:
+            pickle.dump((self.feature_selection_pipeline, self.classification_pipeline), f)
+
+    def from_bytes(self, bytes_: bytes) -> None:
+        self.feature_selection_pipeline, self.classification_pipeline = pickle.loads(bytes_)
+
+    def from_disk(self, filepath: Path) -> None:
+        with open(filepath, "rb") as f:
+            self.feature_selection_pipeline, self.classification_pipeline = pickle.load(f)
