@@ -1,6 +1,6 @@
 # source: https://raw.githubusercontent.com/explosion/spaCy/master/spacy/lang/id/stop_words.py
 
-STOP_WORDS = set(
+STOPWORDS = set(
     """
 ada adalah adanya adapun agak agaknya agar akan akankah akhir akhiri akhirnya
 aku akulah amat amatlah anda andalah antar antara antaranya apa apaan apabila
