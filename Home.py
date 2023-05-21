@@ -17,7 +17,7 @@ st.markdown(
                 INDONESIAN EMOTIONAL TEXTS USING CLASS<br>
                 WEIGHTED SUPPORT VECTOR MACHINES
             </h2>
-            <h2>WEB APPLICATION INTERFACE</h2>
+            <h2>WEB INTERFACE</h2>
             <h2>
                 MUHAMMAD RAJAUL GHUFRAN<br>
                 161402142
