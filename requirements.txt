@@ -1,9 +1,10 @@
+dpctl
 matplotlib==3.7.1
 numpy==1.24.3
 pandas==1.5.3
 plotly==5.14.1
 scikit-learn==1.2.2
-scikit-learn-intelex==20230426.135241
+scikit-learn-intelex
 stanza==1.5.0
 streamlit==1.22.0
 torch==2.0.1
