@@ -9,5 +9,4 @@ CALL conda install dpcpp_cpp_rt -c intel -y
 CALL conda install -c conda-forge matplotlib -y
 CALL conda install -c conda-forge ipywidgets -y
 CALL conda install -c conda-forge streamlit -y
-CALL conda install -c conda-forge spacy -y
 CALL conda install -c plotly plotly -y
