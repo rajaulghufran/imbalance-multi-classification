@@ -76,19 +76,22 @@ class Classification:
     def get_model_attrs(self):
         pos_filter = self.feature_selection_pipeline.named_steps["pos_filter"]
         stopword_removal = self.feature_selection_pipeline.named_steps["stopword_removal"]
+        document_transformer = self.feature_selection_pipeline.named_steps["document_transformer"]
         tfidfvectorizer = self.classification_pipeline.named_steps["tfidfvectorizer"]
         svc = self.classification_pipeline.named_steps["svc"]
 
         attrs = {
             "pos_filter__pos": pos_filter.pos,
             "stopword_removal__stopwords": set(stopword_removal.stopwords),
+            "document_transformer__feat_attrs": document_transformer.feat_attrs,
             "tfidfvectorizer__ngram_range": tfidfvectorizer.ngram_range,
             "tfidfvectorizer__min_df": tfidfvectorizer.min_df,
             "tfidfvectorizer__max_df": tfidfvectorizer.max_df,
             "tfidfvectorizer__stop_words": tfidfvectorizer.stop_words_,
             "tfidfvectorizer__vocabulary": tfidfvectorizer.vocabulary_,
             "svc__kernel": svc.kernel,
-            "svc__C": svc.C
+            "svc__C": svc.C,
+            "svc__classes": svc.classes_
         }
 
         if svc.kernel == "rbf":
@@ -97,10 +100,10 @@ class Classification:
         return attrs
 
     def train_test_split(
-            self,
-            X: Iterable,
-            y: Iterable,
-            test_size: float = .2
+        self,
+        X: Iterable,
+        y: Iterable,
+        test_size: float = .2
     ) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
         return train_test_split(
             X,
@@ -116,7 +119,9 @@ class Classification:
         y_train: Iterable,
         param_grid: Union[None, List[Dict[str, any]]] = None,
         n_jobs: int = 1,
-        verbose: Literal[1, 2, 3] = 1
+        verbose: Literal[1, 2, 3] = 1,
+        n_splits: int = 5,
+        train_size: Union[float, int] = 0.8
     ) -> Tuple[GridSearchCV, float]:
         if param_grid is None:
             param_grid = [
@@ -144,7 +149,7 @@ class Classification:
             param_grid=param_grid,
             scoring=make_scorer(matthews_corrcoef),
             n_jobs=n_jobs,
-            cv=StratifiedShuffleSplit(n_splits=5, test_size=.2, random_state=42),
+            cv=StratifiedShuffleSplit(n_splits=n_splits, train_size=train_size, random_state=42),
             verbose=verbose
         )
 
