@@ -81,7 +81,6 @@ def filter_dataframe(df: pd.DataFrame, key: str) -> pd.DataFrame:
 
     return df
 
-# TODO: full compatibility with splitted df
 def filter_dataframe_single_column(df: pd.DataFrame, key: str, n_splits: int) -> pd.DataFrame:
     modify = st.checkbox("Add filters", key=f'{key}.add_filters')
 
@@ -143,24 +142,17 @@ def get_term_doc_freq_df(X):
 
     terms = {k: v for k, v in sorted(terms.items(), key=lambda item: item[1], reverse=True)}
 
-    t1, t2 = np.array_split(list(terms.keys()), 2)
-    df1, df2 = np.array_split(list(terms.values()), 2)
-    dfp1, dfp2 = np.array_split([v / len(X) for v in terms.values()], 2)
-
     return (
         len(terms),
-        pd.DataFrame([t1, df1, dfp1, t2, df2, dfp2])
+        pd.DataFrame([list(terms.keys()), list(terms.values()), [v / len(X) for v in terms.values()]])
         .transpose()
         .set_axis(
-            ["TERMS1", "DF1", "DF1 %", "TERMS2", "DF2", "DF2 %"],
+            ["Terms", "DF", "DF %"],
             axis="columns"
         ).astype({
-            "TERMS1": 'object',
-            "DF1": 'Int32',
-            "DF1 %": "Float32",
-            "TERMS2": 'object',
-            "DF2": 'Int32',
-            "DF2 %": "Float32"
+            "Terms": 'object',
+            "DF": 'Int32',
+            "DF %": "Float32"
         })
     )
 
@@ -179,6 +171,10 @@ def create_vocab_df(vocab_=None):
 @st.cache_resource
 def instantiate_classification() -> Classification:
     return Classification()
+
+@st.cache_data
+def stack_df(df):
+    return [x for x in df.values.ravel('F') if x is not None]
 
 def read_dataset(from_: str, to_: str) -> None:
     uploaded_dataset = st.session_state[from_]
