@@ -10,13 +10,7 @@ from sklearn.model_selection import GridSearchCV
 
 from pipeline.classification import Classification
 from pipeline.data.stopwords import STOPWORDS
-from util import convert_df, create_vocab_df, delete_state, delete_states, filter_dataframe, filter_dataframe_single_column, get_term_doc_freq_df, init_state, instantiate_classification, read_dataset, stack_df
-
-POS = {
-    "tags": ["ADJ","ADP","ADV","AUX","CONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"],
-    "descriptions": ["adjective","adposition","adverb","auxiliary","conjunction","determiner","interjection","noun","numeral","particle","pronoun","proper noun","punctuation","subordinating conjunction","symbol","verb","other"],
-    "examples": ["salah, pertama, besar","di, pada, dari","juga, lebih, kemudian","adalah, akan, dapat","dan, atau, tetapi","ini, itu, buah","Hai, Oh, Sayang","tahun, orang, desa","satu, dua, 1","tidak, kah, lah","yang, dia, mereka","Indonesia, kabupaten, kecamatan",", ? ()","untuk, bahwa, dengan","%, =, °","menjadi, merupakan, memiliki", "and, image, in"]
-}
+from util import POS, convert_df, create_vocab_df, delete_state, delete_states, filter_dataframe, filter_dataframe_single_column, get_term_doc_freq_df, init_state, instantiate_classification, read_dataset, stack_df
 
 TF_IDF_VECTORIZER_DF = pd.DataFrame.from_dict(
     {
@@ -123,14 +117,14 @@ def train(
         with st.spinner("Text Preprocessing..."):
             X_train = clf.text_preprocessing_pipeline.transform(X_train)
             
-            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["lemma"]})
-            st.session_state["training.X.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_train, verbose__=False)
+            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["lemma","upos"]})
+            st.session_state["training.X_train.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_train, verbose__=False)
 
         clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
 
         with st.spinner("Feature Selection..."):
             X_train = clf.feature_selection_pipeline.transform(X_train)
-            st.session_state["training.X.feature_selected"] = X_train
+            st.session_state["training.X_train.feature_selected"] = X_train
 
         with st.spinner("Hyperparameters tuning..."):
             hyper_parameters = {}
@@ -470,16 +464,15 @@ if "training.train.succeed" in st.session_state:
         st.subheader("Parallel coordinates plot")
         st.markdown("To show the performance of every hyper-parameter combinations")
 
-        parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if any(x in col_name for x in ["param_", "split", "mean_test_score"])]]
+        parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if any(x in col_name for x in ["param_", "mean_test_score"])]]
         parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("__")[-1] if "param_" in col_name else col_name, axis="columns")
-        parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("_test_score")[0] if "split" in col_name else col_name, axis="columns")
 
         dimensions = []
 
         for col_name in parallel_coordinates_df:
             series = parallel_coordinates_df[col_name]
 
-            if any(x in col_name for x in ["split", "mean_test_score"]):
+            if col_name == "mean_test_score":
                 dimensions.append({
                     "label": col_name,
                     "values": parallel_coordinates_df[col_name],
@@ -532,7 +525,7 @@ if "training.train.succeed" in st.session_state:
     tab1, tab2 = st.tabs(["Pre-feature selection","Post-feature selection"])
 
     with tab1:
-        length, pre_tdf_df = get_term_doc_freq_df(st.session_state["training.X.preprocessed"])
+        length, pre_tdf_df = get_term_doc_freq_df([[word.split(".")[0] for word in document] for document in st.session_state["training.X_train.preprocessed"]])
         
         st.markdown(f"n_unique={length}")
 
@@ -555,7 +548,7 @@ if "training.train.succeed" in st.session_state:
         st.divider()
 
     with tab2:
-        length, post_tdf_df = get_term_doc_freq_df(st.session_state["training.X.feature_selected"])
+        length, post_tdf_df = get_term_doc_freq_df(st.session_state["training.X_train.feature_selected"])
         
         st.markdown(f"n_unique={length}")
 
@@ -573,6 +566,73 @@ if "training.train.succeed" in st.session_state:
             file_name="terms_document_frequencies.csv",
             mime="text/csv",
             key="training.post_tdf_df.download"
+        )
+
+        st.divider()
+
+    st.subheader("Filtered POS")
+
+    tab1, tab2 = st.tabs(["Keep","Removed"])
+
+    terms = {}
+
+    for document in st.session_state["training.X_train.preprocessed"]:
+        for token in document:
+            if token in terms:
+                terms[token] += 1
+            else:
+                terms[token] = 1
+
+    terms = {k: v for k, v in sorted(terms.items(), key=lambda item: item[1], reverse=True)}
+
+    filtered_pos_df = pd.DataFrame.from_dict({
+        "Terms": [token.split(".")[0] for token in list(terms.keys())],
+        "POS": [token.split(".")[1] for token in list(terms.keys())],
+        "Freq": list(terms.values())
+    })
+
+    with tab1:
+        keep_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(model_attrs["pos_filter__pos"])]
+        
+        st.markdown(f"n_unique={len(keep_pos_df)}")
+
+        st.dataframe(
+            filter_dataframe(
+                keep_pos_df,
+                key="training.keep_pos_df"
+            ),
+            use_container_width=True
+        )
+
+        st.download_button(
+            "Download",
+            convert_df(keep_pos_df),
+            file_name="keep_pos.csv",
+            mime="text/csv",
+            key="training.keep_pos_df.download"
+        )
+
+        st.divider()
+
+    with tab2:
+        removed_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(set(POS["tags"]) - set(model_attrs["pos_filter__pos"]))]
+        
+        st.markdown(f"n_unique={len(removed_pos_df)}")
+
+        st.dataframe(
+            filter_dataframe(
+                removed_pos_df,
+                key="training.removed_pos_df"
+            ),
+            use_container_width=True
+        )
+
+        st.download_button(
+            "Download",
+            convert_df(removed_pos_df),
+            file_name="removed_pos.csv",
+            mime="text/csv",
+            key="training.removed_pos_df.download"
         )
 
         st.divider()
