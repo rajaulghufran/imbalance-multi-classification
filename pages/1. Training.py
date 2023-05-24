@@ -6,12 +6,11 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from sklearn.metrics import ConfusionMatrixDisplay
 from sklearn.model_selection import GridSearchCV
 
 from pipeline.classification import Classification
 from pipeline.data.stopwords import STOPWORDS
-from util import convert_df, create_vocab_df, delete_states, filter_dataframe, filter_dataframe_single_column, get_term_doc_freq_df, init_state, instantiate_classification, read_dataset
+from util import convert_df, create_vocab_df, delete_state, delete_states, filter_dataframe, filter_dataframe_single_column, get_term_doc_freq_df, init_state, instantiate_classification, read_dataset, stack_df
 
 POS = {
     "tags": ["ADJ","ADP","ADV","AUX","CONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"],
@@ -41,14 +40,6 @@ SVC_DF = pd.DataFrame.from_dict(
 def load_default_stopwords():
     return pd.DataFrame(np.array_split(sorted(list(STOPWORDS)), 5)).transpose()
 
-@st.cache_data
-def convert_stopwords(df):
-    return [
-        stopword
-        for stopword in list(np.concatenate([df[col_name].values for col_name in df.columns]))
-        if stopword is not None
-    ]
-
 def read_stopwords():
     uploaded_stopwords = st.session_state["training.uploaded_stopwords"]
 
@@ -74,68 +65,81 @@ def restore_dtype(x):
     except:
         return x
 
-def train(dataset_df, stopwords_df, tfidfvectorizer_hyperparameters, svc_hyperparameters):
-    if any(
-        st.session_state[key] == "Select a column"
-        for key in [
-            "training.texts",
-            "training.targets"
-        ]
-    ):
+def train(
+    dataset_df,
+    texts_col_name,
+    targets_col_name,
+    categories,
+    pos,
+    stopwords,
+    feature_attrs,
+    tfidfvectorizer_hyperparameters_df,
+    svc_hyperparameters_df,
+    n_splits,
+    train_size
+):
+    valid = (
+        (
+            texts_col_name != "Select a column" or
+            targets_col_name != "Select a column"
+        ),
+        bool(categories) if targets_col_name != "Select a column" else True,
+        bool(pos),
+        bool(feature_attrs),
+        (
+            not tfidfvectorizer_hyperparameters_df["ngram_range"].dropna().empty and
+            not tfidfvectorizer_hyperparameters_df["min_df"].dropna().empty and
+            not tfidfvectorizer_hyperparameters_df["max_df"].dropna().empty
+        ),
+        (
+            (
+                not svc_hyperparameters_df["kernel"].dropna().empty and
+                not(svc_hyperparameters_df["gamma"].dropna().empty) if "rbf" in svc_hyperparameters_df["kernel"].dropna().values else True
+            ) and
+            not svc_hyperparameters_df["C"].dropna().empty
+        )
+    )
+
+    if all(valid):
         delete_states([
+            "training.selected_columns.alert.error",
             "training.categories.alert.error",
-            "training.train.succeed"
-        ])
-        st.session_state["training.selected_columns.alert.error"] = "Please select texts to classify and the targets of classification."
-
-    elif not st.session_state["training.categories"]:
-        delete_states([
-            "training.selected_columns.alert.error",
-            "training.train.succeed"
-        ])
-        st.session_state["training.categories.alert.error"] = "Please select categories to classify."
-
-    else:
-        delete_states([
-            "training.selected_columns.alert.error",
-            "training.categories.alert.error"
+            "training.pos.alert.error",
+            "training.feature_attrs.alert.error",
+            "training.tfidfvectorizer_hyperparameters.alert.error",
+            "training.svc_hyperparameters.alert.error"
         ])
 
         clf: Classification = st.session_state["clf"]
 
-        col_name = st.session_state["training.targets"]
-        dataset_df = dataset_df[dataset_df[col_name].isin(st.session_state["training.categories"])]
+        dataset_df = dataset_df[dataset_df[targets_col_name].isin(categories)]
 
-        X = list(dataset_df[st.session_state["training.texts"]])
-        y = list(dataset_df[st.session_state["training.targets"]])
-
-        stopwords = convert_stopwords(stopwords_df)
+        X_train = list(dataset_df[texts_col_name])
+        y_train = list(dataset_df[targets_col_name])
 
         clf.feature_selection_pipeline.named_steps["stopword_removal"].set_params(**{"stopwords": set(stopwords)})
-        clf.feature_selection_pipeline.named_steps["pos_filter"].set_params(**{"pos": set(st.session_state["training.pos"])})
-        clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["lemma","upos"]})
-
+        clf.feature_selection_pipeline.named_steps["pos_filter"].set_params(**{"pos": set(pos)})
+    
         with st.spinner("Text Preprocessing..."):
-            X = clf.text_preprocessing_pipeline.transform(X)
-            st.session_state["training.X.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X, verbose__=False)
+            X_train = clf.text_preprocessing_pipeline.transform(X_train)
+            
+            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["lemma"]})
+            st.session_state["training.X.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_train, verbose__=False)
+
+        clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
 
         with st.spinner("Feature Selection..."):
-            X = clf.feature_selection_pipeline.transform(X)
-            st.session_state["training.X.feature_selected"] = X
-
-        # Split
-        X_train, X_test, y_train, y_test = clf.train_test_split(X, y)
-
-        st.session_state["training.y_test"] = y_test
+            X_train = clf.feature_selection_pipeline.transform(X_train)
+            st.session_state["training.X.feature_selected"] = X_train
 
         with st.spinner("Hyperparameters tuning..."):
             hyper_parameters = {}
 
-            for k, v in tfidfvectorizer_hyperparameters.items():
+            for k, v in tfidfvectorizer_hyperparameters_df.items():
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
-            for k, v in svc_hyperparameters.items():
+            for k, v in svc_hyperparameters_df.items():
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
@@ -160,7 +164,7 @@ def train(dataset_df, stopwords_df, tfidfvectorizer_hyperparameters, svc_hyperpa
                     "svc__gamma": hyper_parameters["gamma"]
                 })
 
-            grid_search, estimation = clf.tuning(X_train, y_train, param_grid)
+            grid_search, estimation = clf.tuning(X_train, y_train, param_grid, n_splits=n_splits, train_size=train_size)
 
         st.session_state["training.grid_search"] = grid_search
         st.session_state["training.grid_search.estimation"] = estimation
@@ -170,13 +174,44 @@ def train(dataset_df, stopwords_df, tfidfvectorizer_hyperparameters, svc_hyperpa
         with st.spinner("Re-training model..."):
             clf.train_preprocessed(X_train, y_train)
 
-        with st.spinner("Prediction..."):        
-            y_pred = clf.test_preprocessed(X_test)
-
-        st.session_state["training.y_pred"] = y_pred
-        st.session_state["training.score"] = clf.score(y_test, y_pred)
-
         st.session_state["training.train.succeed"] = True
+
+    else:
+        delete_state("training.train.succeed")
+
+        if valid[0]:
+            delete_state("training.selected_columns.alert.error")
+        else:
+            st.session_state["training.selected_columns.alert.error"] = "Please select the texts to classify and the targets of classification."
+
+        if valid[1]:
+            delete_state("training.categories.alert.error")
+        else:
+            st.session_state["training.categories.alert.error"] = "Please select categories to classify."
+
+        if valid[2]:
+            delete_state("training.pos.alert.error")
+        else:
+            st.session_state["training.pos.alert.error"] = "Please select at least one part-of-speech."
+
+        if valid[3]:
+            delete_state("training.feature_attrs.alert.error")
+        else:
+            st.session_state["training.feature_attrs.alert.error"] = "Please select at least one word attribute."
+
+        if valid[4]:
+            delete_state("training.tfidfvectorizer_hyperparameters.alert.error")
+        else:
+            st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"] = "Please fill at least one for each parameter."
+
+        if valid[5]:
+            delete_state("training.svc_hyperparameters.alert.error")
+        else:
+            st.session_state["training.svc_hyperparameters.alert.error"] = """
+                Please fill at least one for each required parameter.  
+                For linear kernel, gamma parameter is not required.  
+                For rbf kernel, gamma parameter is required.
+            """
 
 st.set_page_config(
     page_title=("Train a model"),
@@ -186,79 +221,85 @@ st.set_page_config(
 )
 
 init_state("clf", instantiate_classification())
+init_state("training.dataset_df", pd.DataFrame.from_dict({"texts": [], "targets": []}, dtype=str))
 init_state("training.stopwords_df", load_default_stopwords())
 
 st.title("Train a model")
 
 st.divider()
 
-st.title("Dataset")
+st.title("Training set")
 
 st.file_uploader(
-    "Upload a dataset",
+    "Upload a training set",
     type="csv",
     key="training.uploaded_dataset",
     on_change=read_dataset,
     args=("training.uploaded_dataset", "training.dataset_df")
 )
 
-if "training.dataset_df" in st.session_state:
-    dataset_df = st.experimental_data_editor(
-        st.session_state["training.dataset_df"],
-        use_container_width=True,
-        num_rows="dynamic"
-    )
+dataset_df = st.experimental_data_editor(
+    st.session_state["training.dataset_df"],
+    use_container_width=True,
+    num_rows="dynamic"
+)
 
-    st.download_button(
-        "Download Dataset",
-        convert_df(dataset_df),
-        file_name="dataset.csv",
-        mime="text/csv"
-    )
+st.markdown(f'length = {len(dataset_df)}')
 
-    st.divider()
+st.download_button(
+    "Download Training Set",
+    convert_df(dataset_df),
+    file_name="training-set.csv",
+    mime="text/csv"
+)
 
-    st.title("Classification")
+st.divider()
+
+if not dataset_df.empty:
+    st.title("Training Configuration")
 
     dataset_df_column_options = ["Select a column"] + list(dataset_df.columns)
 
     st.header("Select columns as Inputs")
 
-    for col, label, key, help in zip(
-        st.columns(2),
-        ["Texts", "Targets"],
-        ["training.texts", "training.targets"],
-        ["Texts to classify", "Targets of classification"]
-    ):
-        with col:
-            st.selectbox(
-                label,
-                dataset_df_column_options,
-                key=key,
-                help=help
-            )
+    col1, col2 = st.columns(2)
+
+    with col1:
+        texts_col_name = st.selectbox(
+            "Texts",
+            dataset_df_column_options,
+            help="Texts to classify"
+        )
+
+    with col2:
+        targets_col_name = st.selectbox(
+            "Targets",
+            dataset_df_column_options,
+            help="Targets of classification"
+        )
+
+    categories = []
 
     if "training.selected_columns.alert.error" in st.session_state:
         st.error(st.session_state["training.selected_columns.alert.error"])
 
-    if st.session_state["training.targets"] != "Select a column":
-        col_name = st.session_state["training.targets"]
-        options = dataset_df[col_name].unique()
+    if targets_col_name != "Select a column":
+        options = dataset_df[targets_col_name].unique()
 
         st.header("Select categories to classify")
-        st.multiselect("Select categories to classify", options=options, default=options, key="training.categories", label_visibility="collapsed")
+        categories = st.multiselect("_", options=options, default=options, label_visibility="collapsed")
 
         if "training.categories.alert.error" in st.session_state:
             st.error(st.session_state["training.categories.alert.error"])
 
-        if st.session_state["training.categories"]:
-            st.header(f'Value counts of texts on selected categories')
+        if categories:
+            st.header(f'Value counts of selected categories')
 
             _1, col, _2 = st.columns([1,10,1])
 
             with col:
-                categories = dataset_df[dataset_df[col_name].isin(st.session_state["training.categories"])][col_name]
-                value_counts = dict(categories.value_counts())
+                categories_filtered_df = dataset_df[dataset_df[targets_col_name].isin(categories)][targets_col_name]
+                value_counts = dict(categories_filtered_df.value_counts())
 
                 fig1, ax1 = plt.subplots()
                 
@@ -267,25 +308,25 @@ if "training.dataset_df" in st.session_state:
                 
                 st.pyplot(fig1)
 
-    st.title("Training Configuration")
+    st.header("Filter part-of-speechs")
+    st.markdown("Only tokens with these part-of-speech will be used as features")
 
-    st.header("Filter specific part-of-speechs")
-    st.markdown("Only tokens with these pos will be used as features")
-
-    st.multiselect(
+    pos = st.multiselect(
         "_",
         options=POS["tags"],
         default=POS["tags"],
-        key="training.pos",
         label_visibility="collapsed"
     )
+
+    if "training.pos.alert.error" in st.session_state:
+        st.error(st.session_state["training.pos.alert.error"])
 
     st.table(pd.DataFrame.from_dict(POS))
 
     st.header("Remove stop words")
 
     st.file_uploader(
-        "Upload stopwords list",
+        "Upload a stopwords list",
         type="txt",
         key="training.uploaded_stopwords",
         on_change=read_stopwords
@@ -299,32 +340,89 @@ if "training.dataset_df" in st.session_state:
 
     st.download_button(
         "Download Stopwords",
-        "\n".join(list(convert_stopwords(stopwords_df))),
+        "\n".join(stack_df(stopwords_df)),
         file_name="stopwords.txt",
         mime="text/plain"
     )
 
-    st.header("Configure the hyper-parameters")
-    st.markdown("### [TF-IDF Vectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html)")
+    st.header("Feature builder")
+    st.markdown("Build the features based on [word attributes](https://stanfordnlp.github.io/stanza/data_objects.html#word).")
 
-    tfidfvectorizer_hyperparamters = st.experimental_data_editor(
+    feature_attrs = st.multiselect(
+        "_",
+        ["text", "lemma", "upos", "xpos"],
+        ["lemma", "upos"],
+        label_visibility="collapsed"
+    )
+    
+    if "training.feature_attrs.alert.error" in st.session_state:
+        st.error(st.session_state["training.feature_attrs.alert.error"])
+
+    st.markdown(f'shape = {".".join(["<"+attr+">"for attr in feature_attrs])}')
+
+    st.header("Hyper-parameters")
+
+    st.subheader("[TF-IDF Vectorizer](https://scikit-learn.org/stable/modules/generated/sklearn.feature_extraction.text.TfidfVectorizer.html)")
+
+    tfidfvectorizer_hyperparameters_df = st.experimental_data_editor(
         TF_IDF_VECTORIZER_DF,
         use_container_width=True,
         num_rows="dynamic"
     )
 
-    st.markdown("### [SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
+    if "training.tfidfvectorizer_hyperparameters.alert.error" in st.session_state:
+        st.error(st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"])
 
-    svc_hyperparamters = st.experimental_data_editor(
+    st.subheader("[SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
+
+    svc_hyperparameters_df = st.experimental_data_editor(
         SVC_DF,
         use_container_width=True,
         num_rows="dynamic"
-    ) 
+    )
+
+    if "training.svc_hyperparameters.alert.error" in st.session_state:
+        st.error(st.session_state["training.svc_hyperparameters.alert.error"])
+
+    st.header("[Cross validation](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedShuffleSplit.html#sklearn.model_selection.StratifiedShuffleSplit)")
+    
+    col1, col2 = st.columns(2)
+
+    with col1:
+        n_splits = st.number_input(
+            "N Splits",
+            min_value=1,
+            value=5,
+            step=1,
+            help="Number of re-shuffling & splitting iterations."
+        )
+
+    with col2:
+        train_size = st.number_input(
+            "Train Size",
+            min_value=0.01,
+            max_value=1.0,
+            value=0.8,
+            step=0.01,
+            help="If float, should be between 0.0 and 1.0 and represent the proportion of the dataset to include in the train split. If int, represents the absolute number of train samples."
+        )
 
     st.button(
         "Train",
         on_click=train,
-        args=(dataset_df, stopwords_df, tfidfvectorizer_hyperparamters, svc_hyperparamters),
+        args=(
+            dataset_df,
+            texts_col_name,
+            targets_col_name,
+            categories,
+            pos,
+            stack_df(stopwords_df),
+            feature_attrs,
+            tfidfvectorizer_hyperparameters_df,
+            svc_hyperparameters_df,
+            n_splits,
+            train_size
+        ),
         type="secondary"
     )
         
@@ -338,10 +436,13 @@ if "training.train.succeed" in st.session_state:
     if "training.grid_search" in st.session_state:
         grid_search: GridSearchCV = st.session_state["training.grid_search"]
 
-        if "training.grid_search.estimation" in st.session_state:
-            st.markdown(f'Fitted {grid_search.n_splits_} folds of {len(grid_search.cv_results_)} candidates, finished in {str(timedelta(seconds=st.session_state["training.grid_search.estimation"]))}.')
+        cv_results = grid_search.cv_results_
+        cv_results_df = pd.DataFrame(cv_results)
 
-        st.markdown("### Best hyper-parameters")
+        if "training.grid_search.estimation" in st.session_state:
+            st.markdown(f'Fitted {grid_search.n_splits_} folds of {len(cv_results_df)} candidates, finished in {str(timedelta(seconds=st.session_state["training.grid_search.estimation"]))}.')
+
+        st.subheader("Best hyper-parameters")
         st.dataframe(
             {
                 k: str(v)
@@ -350,20 +451,35 @@ if "training.train.succeed" in st.session_state:
             use_container_width=True
         )
 
-        st.markdown("###  Parallel Coordinates")
+        st.subheader("Cross Validation results")
+        st.dataframe(
+            filter_dataframe(
+                cv_results_df,
+                "training.cv_results_df"
+            ),
+            use_container_width=True
+        )
 
-        cv_results = grid_search.cv_results_
-        
-        cv_results_df = pd.DataFrame(cv_results)
-        parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if "param_" in col_name or col_name == "mean_test_score"]]
-        parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: "MCC" if col_name == "mean_test_score" else col_name.split("__")[-1], axis="columns")
+        st.download_button(
+            "Download CV results",
+            convert_df(cv_results_df),
+            file_name="cv_results.csv",
+            mime="text/csv"
+        )
+
+        st.subheader("Parallel coordinates plot")
+        st.markdown("To show the performance of every hyper-parameter combinations")
+
+        parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if any(x in col_name for x in ["param_", "split", "mean_test_score"])]]
+        parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("__")[-1] if "param_" in col_name else col_name, axis="columns")
+        parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("_test_score")[0] if "split" in col_name else col_name, axis="columns")
 
         dimensions = []
 
         for col_name in parallel_coordinates_df:
             series = parallel_coordinates_df[col_name]
 
-            if col_name == "MCC":
+            if any(x in col_name for x in ["split", "mean_test_score"]):
                 dimensions.append({
                     "label": col_name,
                     "values": parallel_coordinates_df[col_name],
@@ -382,72 +498,34 @@ if "training.train.succeed" in st.session_state:
 
         fig2 = px.parallel_coordinates(
             parallel_coordinates_df,
-            color="MCC",
+            color="mean_test_score",
             color_continuous_scale=px.colors.diverging.RdYlGn,
             color_continuous_midpoint=0,
             range_color=[-1,1]
         )
 
         fig2.update_traces(dimensions=dimensions)
-        fig2.update_layout(margin={"l": 20})
+        fig2.update_layout(margin={"l": 15})
 
         st.plotly_chart(fig2, use_container_width=True)
 
-        st.markdown("###  Cross Validation results")
-        st.dataframe(
-            filter_dataframe(
-                cv_results_df,
-                "training.cv_results_df"
-            ),
-            use_container_width=True
-        )
-
-        st.download_button(
-            "Download CV results",
-            convert_df(cv_results_df),
-            file_name="cv_results.csv",
-            mime="text/csv"
-        )
-
-    st.header("Model Evaluation")
-
+    st.header("Model successfully trained!")
+    
     clf: Classification = st.session_state["clf"]
 
-    model_attrs = clf.get_model_attrs()
-
-    st.subheader("TF-IDF Vectorizer Stopwords")
     st.markdown("""
-        Terms that were ignored by TF-IDF Vectorizer because they either:
-        - occured in too few documents (min_df)
-        - occured in too many documents (max_df)
+        Retrained with the best hyper-parameters.  
+        On [testing page](/._Testing), you can upload a testing set and evaluate the model.
     """)
-    st.dataframe(
-        filter_dataframe_single_column(
-            pd.DataFrame(
-                np.array_split(
-                    sorted(model_attrs["tfidfvectorizer__stop_words"]),
-                    6
-                )
-            ).transpose(),
-            key="training.tfidfvectorizer.stopwords",
-            n_splits=6
-        ),
-        use_container_width=True
+
+    st.download_button(
+        "Download Model",
+        data=clf.to_bytes(),
+        file_name=f'model.{datetime.now().strftime("%Y.%m.%d.%H.%M.%S.%f")}.pickle',
+        mime="application/octet-stream"
     )
 
-    st.subheader("TF-IDF Vectorizer Vocabulary")
-    st.markdown(f"""
-        Terms that were used as features to train the classifier.  
-        features_shape=(1, {len(model_attrs["tfidfvectorizer__vocabulary"])})
-    """)
-    st.dataframe(
-        filter_dataframe_single_column(
-            create_vocab_df(model_attrs["tfidfvectorizer__vocabulary"]),
-            key="training.tfidfvectorizer.vocabulary",
-            n_splits=3
-        ),
-        use_container_width=True
-    )
+    model_attrs = clf.get_model_attrs()
 
     st.subheader("Terms & Document Frequencies")
 
@@ -499,36 +577,60 @@ if "training.train.succeed" in st.session_state:
 
         st.divider()
 
-    if (
-        "training.y_test" in st.session_state and
-        "training.y_pred" in st.session_state
-    ):
-        st.markdown("### Confusion Matrix")
-
-        _1, col, _2 = st.columns([1,10,1])
-
-        with col:
-            cm = ConfusionMatrixDisplay.from_predictions(st.session_state["training.y_test"], st.session_state["training.y_pred"], normalize="true", cmap="YlGn")
-            st.pyplot(cm.figure_)
-
-    if "training.score" in st.session_state:
-        st.markdown("### Score")
-
-        accuracy, mcc = st.session_state["training.score"]
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.metric("Accuracy", f"{round(accuracy*100, 3)}%")
-
-        with col2:
-            st.metric("MCC", f"{round(mcc, 3)}")
+    st.subheader("TF-IDF Vectorizer Stopwords")
+    
+    st.markdown("""
+        Terms that were ignored by TF-IDF Vectorizer because they either:
+        - occured in too few documents (min_df)
+        - occured in too many documents (max_df)
+    """)
+    
+    tfidfvectorizer_stopwords_df = filter_dataframe_single_column(
+        pd.DataFrame(
+            np.array_split(
+                sorted(model_attrs["tfidfvectorizer__stop_words"]),
+                6
+            )
+        ).transpose(),
+        key="training.tfidfvectorizer.stopwords",
+        n_splits=6
+    )
+    
+    st.dataframe(
+        tfidfvectorizer_stopwords_df,
+        use_container_width=True
+    )
 
     st.download_button(
-        "Download Model",
-        data=st.session_state["clf"].to_bytes(),
-        file_name=f'model.{datetime.now().strftime("%Y.%m.%d.%H.%M.%S.%f")}.pickle',
-        mime="application/octet-stream"
+        "Download TF-IDF Vectorizer Stopwords",
+        "\n".join(stack_df(tfidfvectorizer_stopwords_df)),
+        file_name="tfidfvectorizer_stopwords.txt",
+        mime="text/plain"
+    )
+
+    st.subheader("TF-IDF Vectorizer Vocabulary")
+    
+    st.markdown(f"""
+        Features that were used to train the classifier.  
+        length = {len(model_attrs["tfidfvectorizer__vocabulary"])}
+    """)
+
+    tfidfvectorizer_vocabulary_df = filter_dataframe_single_column(
+        create_vocab_df(model_attrs["tfidfvectorizer__vocabulary"]),
+        key="training.tfidfvectorizer.vocabulary",
+        n_splits=3
+    )
+    
+    st.dataframe(
+        tfidfvectorizer_vocabulary_df,
+        use_container_width=True
+    )
+
+    st.download_button(
+        "Download TF-IDF Vectorizer Vocabulary",
+        "\n".join(stack_df(tfidfvectorizer_vocabulary_df)),
+        file_name="tfidfvectorizer_vocabulary.txt",
+        mime="text/plain"
     )
 
 st.divider()
