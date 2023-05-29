@@ -1,12 +1,13 @@
 from datetime import datetime, timedelta
 from PIL import Image
 
+import ast
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import streamlit as st
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 
 from pipeline.classification import Classification
 from pipeline.data.stopwords import STOPWORDS
@@ -14,18 +15,20 @@ from util import POS, convert_df, create_vocab_df, delete_state, delete_states, 
 
 TF_IDF_VECTORIZER_DF = pd.DataFrame.from_dict(
     {
-        "ngram_range": ("(1, 1)", "(1, 2)"),
-        "min_df": ("1", "3", "5", "10"),
-        "max_df": ("0.2", "0.4", "0.6", "0.8", "1.0")
+        "ngram_range": ("(1, 1)", "(1, 2)", "(2, 2)"),
+        "min_df": ("0.01","1", "3", "5", "10"),
+        "max_df": ("0.2", "0.4", "0.6", "0.8", "1.0"),
+        "norm": ("None", "l1", "l2"),
+        "sublinear_tf": ("True", "False")
     },
     orient="index"
 ).transpose()
 
 SVC_DF = pd.DataFrame.from_dict(
     {
-        "kernel": ("linear", "rbf"),
-        "C": ("0.01", "0.1", "1", "10", "100", "1000", "10000"),
-        "gamma": ("0.0001", "0.001", "0.01", "0.1", "1")
+        "C": ("0.01", "0.1", "1", "10", "100"),
+        "class_weight": ("None","balanced",),
+        "decision_function_shape": ("ovo", "ovr")
     },
     orient="index"
 ).transpose()
@@ -48,11 +51,11 @@ def restore_dtype(x):
     x = x.replace(" ","")
 
     try:
-        if '(' in x:
-            return tuple(restore_dtype(y) for y in x.replace("(","").replace(")","").split(","))
-
-        if '.' in x:
-            return float(x) 
+        if (
+            x in ["None","True","False"] or
+            any(y in x for y in ["(","{","."])
+        ):
+            return ast.literal_eval(x)
 
         return int(x)
 
@@ -69,12 +72,13 @@ def train(
     feature_attrs,
     tfidfvectorizer_hyperparameters_df,
     svc_hyperparameters_df,
+    n_iter,
     n_splits,
     train_size
 ):
     valid = (
         (
-            texts_col_name != "Select a column" or
+            texts_col_name != "Select a column" and
             targets_col_name != "Select a column"
         ),
         bool(categories) if targets_col_name != "Select a column" else True,
@@ -83,14 +87,14 @@ def train(
         (
             not tfidfvectorizer_hyperparameters_df["ngram_range"].dropna().empty and
             not tfidfvectorizer_hyperparameters_df["min_df"].dropna().empty and
-            not tfidfvectorizer_hyperparameters_df["max_df"].dropna().empty
+            not tfidfvectorizer_hyperparameters_df["max_df"].dropna().empty and
+            not tfidfvectorizer_hyperparameters_df["norm"].dropna().empty and
+            not tfidfvectorizer_hyperparameters_df["sublinear_tf"].dropna().empty
         ),
         (
-            (
-                not svc_hyperparameters_df["kernel"].dropna().empty and
-                not(svc_hyperparameters_df["gamma"].dropna().empty) if "rbf" in svc_hyperparameters_df["kernel"].dropna().values else True
-            ) and
-            not svc_hyperparameters_df["C"].dropna().empty
+            not svc_hyperparameters_df["C"].dropna().empty and
+            not svc_hyperparameters_df["class_weight"].dropna().empty and
+            not svc_hyperparameters_df["decision_function_shape"].dropna().empty
         )
     )
 
@@ -137,36 +141,24 @@ def train(
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
-            param_grid = []
+            param_distributions = {
+                "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
+                "tfidfvectorizer__min_df": hyper_parameters["min_df"],
+                "tfidfvectorizer__max_df": hyper_parameters["max_df"],
+                "tfidfvectorizer__norm": hyper_parameters["norm"],
+                "tfidfvectorizer__sublinear_tf": hyper_parameters["sublinear_tf"],
+                "svc__kernel": ("linear",),
+                "svc__C": hyper_parameters["C"],
+                "svc__class_weight": hyper_parameters["class_weight"],
+                "svc__decision_function_shape": hyper_parameters["decision_function_shape"]
+            }
 
-            if "linear" in hyper_parameters["kernel"]:
-                param_grid.append({
-                    "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
-                    "tfidfvectorizer__min_df": hyper_parameters["min_df"],
-                    "tfidfvectorizer__max_df": hyper_parameters["max_df"],
-                    "svc__kernel": ("linear",),
-                    "svc__C": hyper_parameters["C"]
-                })
+            randomized_search, estimation = clf.tuning(X_train, y_train, param_distributions, n_iter=n_iter, n_splits=n_splits, train_size=train_size)
 
-            if "rbf" in hyper_parameters["kernel"]:
-                param_grid.append({
-                    "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
-                    "tfidfvectorizer__min_df": hyper_parameters["min_df"],
-                    "tfidfvectorizer__max_df": hyper_parameters["max_df"],
-                    "svc__kernel": ("rbf",),
-                    "svc__C": hyper_parameters["C"],
-                    "svc__gamma": hyper_parameters["gamma"]
-                })
+        st.session_state["training.randomized_search"] = randomized_search
+        st.session_state["training.randomized_search.estimation"] = estimation
 
-            grid_search, estimation = clf.tuning(X_train, y_train, param_grid, n_splits=n_splits, train_size=train_size)
-
-        st.session_state["training.grid_search"] = grid_search
-        st.session_state["training.grid_search.estimation"] = estimation
-
-        clf.classification_pipeline.set_params(**grid_search.best_params_)
-
-        with st.spinner("Re-training model..."):
-            clf.train_preprocessed(X_train, y_train)
+        clf.classification_pipeline = randomized_search.best_estimator_
 
         st.session_state["training.train.succeed"] = True
 
@@ -201,11 +193,7 @@ def train(
         if valid[5]:
             delete_state("training.svc_hyperparameters.alert.error")
         else:
-            st.session_state["training.svc_hyperparameters.alert.error"] = """
-                Please fill at least one for each required parameter.  
-                For linear kernel, gamma parameter is not required.  
-                For rbf kernel, gamma parameter is required.
-            """
+            st.session_state["training.svc_hyperparameters.alert.error"] = """Please fill at least one for each parameter."""
 
 st.set_page_config(
     page_title=("Train a model"),
@@ -293,11 +281,11 @@ if not dataset_df.empty:
 
             with col:
                 categories_filtered_df = dataset_df[dataset_df[targets_col_name].isin(categories)][targets_col_name]
-                value_counts = dict(categories_filtered_df.value_counts())
+                value_counts = categories_filtered_df.value_counts()
 
                 fig1, ax1 = plt.subplots()
                 
-                ax1.pie(value_counts.values(), labels=value_counts.keys(), autopct='%1.1f%%')
+                ax1.pie(value_counts, labels=value_counts.keys(), autopct=lambda x: '{:.2f}%\n({:.0f})'.format(x, round(x*value_counts.sum()/100, 0)))
                 ax1.axis('equal')
                 
                 st.pyplot(fig1)
@@ -368,6 +356,7 @@ if not dataset_df.empty:
         st.error(st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"])
 
     st.subheader("[SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
+    st.markdown("kernel=linear")
 
     svc_hyperparameters_df = st.experimental_data_editor(
         SVC_DF,
@@ -378,7 +367,22 @@ if not dataset_df.empty:
     if "training.svc_hyperparameters.alert.error" in st.session_state:
         st.error(st.session_state["training.svc_hyperparameters.alert.error"])
 
-    st.header("[Cross validation](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedShuffleSplit.html#sklearn.model_selection.StratifiedShuffleSplit)")
+    st.header("Tuning Method")
+
+    st.subheader("[RandomizedSearchCV](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.RandomizedSearchCV.html)")
+    
+    col1, col2 = st.columns(2)
+
+    with col1:
+        n_iter = st.number_input(
+            "N Iterations",
+            min_value=1,
+            value=10,
+            step=1,
+            help="Number of parameter settings that are sampled. n_iter trades off runtime vs quality of the solution."
+        )
+    
+    st.subheader("[StratifiedShuffleSplit](https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.StratifiedShuffleSplit.html)")
     
     col1, col2 = st.columns(2)
 
@@ -414,6 +418,7 @@ if not dataset_df.empty:
             feature_attrs,
             tfidfvectorizer_hyperparameters_df,
             svc_hyperparameters_df,
+            n_iter,
             n_splits,
             train_size
         ),
@@ -427,20 +432,20 @@ if "training.train.succeed" in st.session_state:
 
     st.header("Hyper-parameters Tuning")
 
-    if "training.grid_search" in st.session_state:
-        grid_search: GridSearchCV = st.session_state["training.grid_search"]
+    if "training.randomized_search" in st.session_state:
+        randomized_search: RandomizedSearchCV = st.session_state["training.randomized_search"]
 
-        cv_results = grid_search.cv_results_
+        cv_results = randomized_search.cv_results_
         cv_results_df = pd.DataFrame(cv_results)
 
-        if "training.grid_search.estimation" in st.session_state:
-            st.markdown(f'Fitted {grid_search.n_splits_} folds of {len(cv_results_df)} candidates, finished in {str(timedelta(seconds=st.session_state["training.grid_search.estimation"]))}.')
+        if "training.randomized_search.estimation" in st.session_state:
+            st.markdown(f'Fitted {randomized_search.n_splits_} folds of {len(cv_results_df)} candidates, finished in {str(timedelta(seconds=st.session_state["training.randomized_search.estimation"]))}.')
 
         st.subheader("Best hyper-parameters")
         st.dataframe(
             {
                 k: str(v)
-                for k, v in grid_search.best_params_.items()
+                for k, v in randomized_search.best_params_.items()
             },
             use_container_width=True
         )
@@ -466,6 +471,9 @@ if "training.train.succeed" in st.session_state:
 
         parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if any(x in col_name for x in ["param_", "mean_test_score"])]]
         parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("__")[-1] if "param_" in col_name else col_name, axis="columns")
+        parallel_coordinates_df = parallel_coordinates_df.reindex(columns=["ngram_range","min_df","max_df","norm","sublinear_tf","kernel","C","class_weight","decision_function_shape","mean_test_score"])
+        parallel_coordinates_df["class_weight"] = parallel_coordinates_df["class_weight"].astype(str)
+        parallel_coordinates_df = parallel_coordinates_df.replace({None: "None"})
 
         dimensions = []
 
@@ -480,7 +488,7 @@ if "training.train.succeed" in st.session_state:
                 })
 
             else:
-                unique_values = list(series.unique())
+                unique_values = sorted(list(series.unique()))
 
                 dimensions.append({
                     "label": col_name,
@@ -498,18 +506,15 @@ if "training.train.succeed" in st.session_state:
         )
 
         fig2.update_traces(dimensions=dimensions)
-        fig2.update_layout(margin={"l": 15})
+        fig2.update_layout(margin={"l": 30})
 
         st.plotly_chart(fig2, use_container_width=True)
 
-    st.header("Model successfully trained!")
+    st.subheader("Best model")
     
     clf: Classification = st.session_state["clf"]
 
-    st.markdown("""
-        Retrained with the best hyper-parameters.  
-        On [testing page](/._Testing), you can upload a testing set and evaluate the model.
-    """)
+    st.markdown("""On [testing page](/._Testing), you can upload a testing set and evaluate the model.""")
 
     st.download_button(
         "Download Model",
