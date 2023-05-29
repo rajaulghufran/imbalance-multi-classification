@@ -2,13 +2,12 @@ import pickle
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from tempfile import mkdtemp
 from time import time
 from typing import Dict, List, Literal, Tuple, Union
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import make_scorer, accuracy_score, matthews_corrcoef
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import RandomizedSearchCV
 from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
@@ -29,24 +28,16 @@ def fun(arg):
 
 class Classification:
     def __init__(self) -> None:
-        cachedir = mkdtemp()
+        self.text_preprocessing_pipeline: Pipeline = Pipeline([
+            ("text_cleaning", TextCleaning()),
+            ("tokenize_mwt_pos_lemma", TokenizeMWTPOSLemma())
+        ])
 
-        self.text_preprocessing_pipeline: Pipeline = Pipeline(
-            [
-                ("text_cleaning", TextCleaning()),
-                ("tokenize_mwt_pos_lemma", TokenizeMWTPOSLemma())
-            ],
-            memory=cachedir
-        )
-
-        self.feature_selection_pipeline: Pipeline = Pipeline(
-            [
-                ("pos_filter", POSFilter()),
-                ("stopword_removal", StopWordRemoval()),
-                ("document_transformer", DocumentTransformer())
-            ],
-            memory=cachedir
-        )
+        self.feature_selection_pipeline: Pipeline = Pipeline([
+            ("pos_filter", POSFilter()),
+            ("stopword_removal", StopWordRemoval()),
+            ("document_transformer", DocumentTransformer())
+        ])
 
         tfidfvectorizer_hyperparameters = {
             "encoding": "ascii",
@@ -58,20 +49,11 @@ class Classification:
             "token_pattern": None,
         }
 
-        svc_hyperparameters = {
-            "class_weight": "balanced",
-            "decision_function_shape": "ovo",
-            "random_state": 42
-        }
-
-        self.classification_pipeline: Pipeline = Pipeline(
-            [
-                ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
-                # ("usm_ndarray_transformer", USMndarrayTransformer()),
-                ("svc", SVC(**svc_hyperparameters)),
-            ],
-            memory=cachedir
-        )
+        self.classification_pipeline: Pipeline = Pipeline([
+            ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
+            # ("usm_ndarray_transformer", USMndarrayTransformer()),
+            ("svc", SVC(random_state=42)),
+        ])
 
     def get_model_attrs(self):
         pos_filter = self.feature_selection_pipeline.named_steps["pos_filter"]
@@ -87,10 +69,15 @@ class Classification:
             "tfidfvectorizer__ngram_range": tfidfvectorizer.ngram_range,
             "tfidfvectorizer__min_df": tfidfvectorizer.min_df,
             "tfidfvectorizer__max_df": tfidfvectorizer.max_df,
+            "tfidfvectorizer__norm": tfidfvectorizer.norm,
+            "tfidfvectorizer__sublinear_tf": tfidfvectorizer.sublinear_tf,
             "tfidfvectorizer__stop_words": tfidfvectorizer.stop_words_,
             "tfidfvectorizer__vocabulary": tfidfvectorizer.vocabulary_,
             "svc__kernel": svc.kernel,
             "svc__C": svc.C,
+            "svc__class_weight": svc.class_weight,
+            "svc__class_weight_": svc.class_weight_,
+            "svc__decision_function_shape": svc.decision_function_shape,
             "svc__classes": svc.classes_
         }
 
@@ -117,48 +104,45 @@ class Classification:
         self,
         X_train: Iterable,
         y_train: Iterable,
-        param_grid: Union[None, List[Dict[str, any]]] = None,
-        n_jobs: int = 1,
-        verbose: Literal[1, 2, 3] = 1,
+        param_distributions: Union[None, List[Dict[str, any]]] = None,
+        n_iter: int = 10,
         n_splits: int = 5,
-        train_size: Union[float, int] = 0.8
-    ) -> Tuple[GridSearchCV, float]:
-        if param_grid is None:
-            param_grid = [
-                {
-                    "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
-                    "tfidfvectorizer__min_df": (1, 3, 5, 10),
-                    "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
-                    "svc__kernel": ("linear",),
-                    "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000)
-                },
-                {
-                    "tfidfvectorizer__ngram_range": ((1, 1), (1, 2)),
-                    "tfidfvectorizer__min_df": (1, 3, 5, 10),
-                    "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
-                    "svc__kernel": ("rbf",),
-                    "svc__C": (0.01, 0.1, 1, 10, 100, 1000, 10000),
-                    "svc__gamma": (0.0001, 0.001, 0.01, 0.1, 1)
-                }
-            ]
+        train_size: Union[float, int] = 0.8,
+        n_jobs: int = 1,
+        verbose: Literal[1, 2, 3] = 3
+    ) -> Tuple[RandomizedSearchCV, float]:
+        if param_distributions is None:
+            param_distributions = {
+                "tfidfvectorizer__ngram_range": ((1, 1), (1, 2), (2, 2)),
+                "tfidfvectorizer__min_df": (0.01, 1, 3, 5, 10),
+                "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
+                "tfidfvectorizer__norm": (None, "l1", "l2"),
+                "tfidfvectorizer__sublinear_tf": (True, False),
+                "svc__kernel": ("linear",),
+                "svc__C": (0.01, 0.1, 1, 10, 100),
+                "svc__class_weight": (None, "balanced"),
+                "svc__decision_function_shape": ("ovo", "ovr")
+            }
             
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: HYPER-PARAMETERS TUNING')
 
-        grid_search = GridSearchCV(
+        randomized_search = RandomizedSearchCV(
             estimator=self.classification_pipeline,
-            param_grid=param_grid,
+            param_distributions=param_distributions,
+            n_iter=n_iter,
             scoring=make_scorer(matthews_corrcoef),
             n_jobs=n_jobs,
             cv=StratifiedShuffleSplit(n_splits=n_splits, train_size=train_size, random_state=42),
-            verbose=verbose
+            verbose=verbose,
+            random_state=42
         )
 
         t0 = time()
 
         with config_context(target_offload="auto", allow_fallback_to_host=True):
-            grid_search.fit(X_train, y_train)
+            randomized_search.fit(X_train, y_train)
 
-        return (grid_search, time() - t0)
+        return (randomized_search, time() - t0)
 
     def train(self, X_train: Iterable, y_train: Iterable) -> None:
         X_train = self.text_preprocessing_pipeline.transform(X_train)
