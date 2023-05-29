@@ -96,7 +96,7 @@ if clf.is_fitted():
     model_attrs = clf.get_model_attrs()
 
     st.subheader("Hyper-parameters")
-    st.markdown("These are parameters used to train the model.")
+    st.markdown("These are parameters that were used to train the model.")
 
     hyper_parameters = {}
 
@@ -114,13 +114,20 @@ if clf.is_fitted():
             elif k == "document_transformer__feat_attrs":
                 hyper_parameters[key] = ".".join(["<"+x+">" for x in v])
 
+            elif k == "svc__class_weight":
+                if model_attrs[k] == model_attrs[f'{k}_']:
+                    hyper_parameters[key] = str(v)
+
+                else:
+                    hyper_parameters[key] = f'{(str(v))}: {str(list(model_attrs[f"{k}_"]))}'
+
+            elif k == "svc__class_weight_":
+                pass
+
             else:
                 hyper_parameters[key] = str(v)
 
-    st.dataframe(
-        hyper_parameters,
-        use_container_width=True
-    )
+    st.table(hyper_parameters)
 
     st.subheader("Stopwords list")
     st.markdown("""
@@ -241,11 +248,11 @@ if clf.is_fitted():
 
             with col:
                 categories = dataset_df[col_name]
-                value_counts = dict(categories.value_counts())
+                value_counts = categories.value_counts()
 
                 fig1, ax1 = plt.subplots()
                 
-                ax1.pie(value_counts.values(), labels=value_counts.keys(), autopct='%1.1f%%')
+                ax1.pie(value_counts, labels=value_counts.keys(), autopct=lambda x: '{:.2f}%\n({:.0f})'.format(x, round(x*value_counts.sum()/100, 0)))
                 ax1.axis('equal')
                 
                 st.pyplot(fig1)
