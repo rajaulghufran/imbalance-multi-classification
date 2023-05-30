@@ -12,9 +12,9 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
+from sklearn.svm import LinearSVC
 from sklearnex import config_context
 from sklearnex.model_selection import train_test_split
-from sklearnex.svm import SVC
 
 from .document_transformer import DocumentTransformer
 from .pos_filter import POSFilter
@@ -52,7 +52,7 @@ class Classification:
         self.classification_pipeline: Pipeline = Pipeline([
             ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
             # ("usm_ndarray_transformer", USMndarrayTransformer()),
-            ("svc", SVC(random_state=42)),
+            ("linearsvc", LinearSVC(random_state=42)),
         ])
 
     def get_model_attrs(self):
@@ -60,7 +60,7 @@ class Classification:
         stopword_removal = self.feature_selection_pipeline.named_steps["stopword_removal"]
         document_transformer = self.feature_selection_pipeline.named_steps["document_transformer"]
         tfidfvectorizer = self.classification_pipeline.named_steps["tfidfvectorizer"]
-        svc = self.classification_pipeline.named_steps["svc"]
+        linearsvc = self.classification_pipeline.named_steps["linearsvc"]
 
         attrs = {
             "pos_filter__pos": pos_filter.pos,
@@ -73,16 +73,18 @@ class Classification:
             "tfidfvectorizer__sublinear_tf": tfidfvectorizer.sublinear_tf,
             "tfidfvectorizer__stop_words": tfidfvectorizer.stop_words_,
             "tfidfvectorizer__vocabulary": tfidfvectorizer.vocabulary_,
-            "svc__kernel": svc.kernel,
-            "svc__C": svc.C,
-            "svc__class_weight": svc.class_weight,
-            "svc__class_weight_": svc.class_weight_,
-            "svc__decision_function_shape": svc.decision_function_shape,
-            "svc__classes": svc.classes_
+            "linearsvc__penalty": linearsvc.penalty,
+            "linearsvc__loss": linearsvc.loss,
+            "linearsvc__dual": linearsvc.dual,
+            "linearsvc__tol": linearsvc.tol,
+            "linearsvc__C": linearsvc.C,
+            "linearsvc__multi_class": linearsvc.multi_class,
+            "linearsvc__fit_intercept": linearsvc.fit_intercept,
+            "linearsvc__multi_class": linearsvc.multi_class,
+            "linearsvc__intercept_scaling": linearsvc.intercept_scaling,
+            "linearsvc__max_iter": linearsvc.max_iter,
+            "linearsvc__classes": linearsvc.classes_
         }
-
-        if svc.kernel == "rbf":
-            attrs["svc__gamma"] = svc.gamma
 
         return attrs
 
@@ -118,10 +120,16 @@ class Classification:
                 "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
                 "tfidfvectorizer__norm": (None, "l1", "l2"),
                 "tfidfvectorizer__sublinear_tf": (True, False),
-                "svc__kernel": ("linear",),
-                "svc__C": (0.01, 0.1, 1, 10, 100),
-                "svc__class_weight": (None, "balanced"),
-                "svc__decision_function_shape": ("ovo", "ovr")
+                "linearsvc__penalty": ("l1","l2"),
+                "linearsvc__loss": ("hinge","squared_hinge"),
+                "linearsvc__dual": (True, False),
+                "linearsvc__tol": (0.0001,),
+                "linearsvc__C": (0.01, 0.1, 1, 10, 100),
+                "linearsvc__multi_class": ("ovr",),
+                "linearsvc__fit_intercept": (True, False),
+                "linearsvc__intercept_scaling": (1.0,),
+                "linearsvc__class_weight": (None, "balanced"),
+                "linearsvc__max_iter": (1000,)
             }
             
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: HYPER-PARAMETERS TUNING')
@@ -178,7 +186,7 @@ class Classification:
     def is_fitted(self) -> bool:
         try:
             check_is_fitted(self.classification_pipeline.named_steps["tfidfvectorizer"], ["vocabulary_"])
-            check_is_fitted(self.classification_pipeline.named_steps["svc"], ["classes_"])
+            check_is_fitted(self.classification_pipeline.named_steps["linearsvc"], ["classes_"])
             return True
 
         except NotFittedError:
