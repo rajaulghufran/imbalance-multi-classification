@@ -24,11 +24,18 @@ TF_IDF_VECTORIZER_DF = pd.DataFrame.from_dict(
     orient="index"
 ).transpose()
 
-SVC_DF = pd.DataFrame.from_dict(
+LINEARSVC_DF = pd.DataFrame.from_dict(
     {
+        "penalty": ("l1","l2"),
+        "loss": ("hinge","squared_hinge"),
+        "dual": ("True", "False"),
+        "tol": ("0.0001",),
         "C": ("0.01", "0.1", "1", "10", "100"),
-        "class_weight": ("None","balanced",),
-        "decision_function_shape": ("ovo", "ovr")
+        "multi_class": ("ovr",),
+        "fit_intercept": ("True", "False"),
+        "intercept_scaling": ("1.0",),
+        "class_weight": ("None", "balanced"),
+        "max_iter": ("1000",)
     },
     orient="index"
 ).transpose()
@@ -71,7 +78,7 @@ def train(
     stopwords,
     feature_attrs,
     tfidfvectorizer_hyperparameters_df,
-    svc_hyperparameters_df,
+    linearsvc_hyperparameters_df,
     n_iter,
     n_splits,
     train_size
@@ -92,9 +99,16 @@ def train(
             not tfidfvectorizer_hyperparameters_df["sublinear_tf"].dropna().empty
         ),
         (
-            not svc_hyperparameters_df["C"].dropna().empty and
-            not svc_hyperparameters_df["class_weight"].dropna().empty and
-            not svc_hyperparameters_df["decision_function_shape"].dropna().empty
+            not linearsvc_hyperparameters_df["penalty"].dropna().empty and
+            not linearsvc_hyperparameters_df["loss"].dropna().empty and
+            not linearsvc_hyperparameters_df["dual"].dropna().empty and
+            not linearsvc_hyperparameters_df["tol"].dropna().empty and
+            not linearsvc_hyperparameters_df["C"].dropna().empty and
+            not linearsvc_hyperparameters_df["multi_class"].dropna().empty and
+            not linearsvc_hyperparameters_df["fit_intercept"].dropna().empty and
+            not linearsvc_hyperparameters_df["intercept_scaling"].dropna().empty and
+            not linearsvc_hyperparameters_df["class_weight"].dropna().empty and
+            not linearsvc_hyperparameters_df["max_iter"].dropna().empty
         )
     )
 
@@ -105,7 +119,7 @@ def train(
             "training.pos.alert.error",
             "training.feature_attrs.alert.error",
             "training.tfidfvectorizer_hyperparameters.alert.error",
-            "training.svc_hyperparameters.alert.error"
+            "training.linearsvc_hyperparameters.alert.error"
         ])
 
         clf: Classification = st.session_state["clf"]
@@ -137,7 +151,7 @@ def train(
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
-            for k, v in svc_hyperparameters_df.items():
+            for k, v in linearsvc_hyperparameters_df.items():
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
@@ -147,10 +161,16 @@ def train(
                 "tfidfvectorizer__max_df": hyper_parameters["max_df"],
                 "tfidfvectorizer__norm": hyper_parameters["norm"],
                 "tfidfvectorizer__sublinear_tf": hyper_parameters["sublinear_tf"],
-                "svc__kernel": ("linear",),
-                "svc__C": hyper_parameters["C"],
-                "svc__class_weight": hyper_parameters["class_weight"],
-                "svc__decision_function_shape": hyper_parameters["decision_function_shape"]
+                "linearsvc__penalty": hyper_parameters["penalty"],
+                "linearsvc__loss": hyper_parameters["loss"],
+                "linearsvc__dual": hyper_parameters["dual"],
+                "linearsvc__tol": hyper_parameters["tol"],
+                "linearsvc__C": hyper_parameters["C"],
+                "linearsvc__multi_class": hyper_parameters["multi_class"],
+                "linearsvc__fit_intercept": hyper_parameters["fit_intercept"],
+                "linearsvc__intercept_scaling": hyper_parameters["intercept_scaling"],
+                "linearsvc__class_weight": hyper_parameters["class_weight"],
+                "linearsvc__max_iter": hyper_parameters["max_iter"]
             }
 
             randomized_search, estimation = clf.tuning(X_train, y_train, param_distributions, n_iter=n_iter, n_splits=n_splits, train_size=train_size)
@@ -191,9 +211,9 @@ def train(
             st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"] = "Please fill at least one for each parameter."
 
         if valid[5]:
-            delete_state("training.svc_hyperparameters.alert.error")
+            delete_state("training.linearsvc_hyperparameters.alert.error")
         else:
-            st.session_state["training.svc_hyperparameters.alert.error"] = """Please fill at least one for each parameter."""
+            st.session_state["training.linearsvc_hyperparameters.alert.error"] = """Please fill at least one for each parameter."""
 
 st.set_page_config(
     page_title=("Train a model"),
@@ -355,17 +375,16 @@ if not dataset_df.empty:
     if "training.tfidfvectorizer_hyperparameters.alert.error" in st.session_state:
         st.error(st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"])
 
-    st.subheader("[SVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.SVC.html#sklearn.svm.SVC)")
-    st.markdown("kernel=linear")
+    st.subheader("[LinearSVC](https://scikit-learn.org/stable/modules/generated/sklearn.svm.LinearSVC.html)")
 
-    svc_hyperparameters_df = st.experimental_data_editor(
-        SVC_DF,
+    linearsvc_hyperparameters_df = st.experimental_data_editor(
+        LINEARSVC_DF,
         use_container_width=True,
         num_rows="dynamic"
     )
 
-    if "training.svc_hyperparameters.alert.error" in st.session_state:
-        st.error(st.session_state["training.svc_hyperparameters.alert.error"])
+    if "training.linearsvc_hyperparameters.alert.error" in st.session_state:
+        st.error(st.session_state["training.linearsvc_hyperparameters.alert.error"])
 
     st.header("Tuning Method")
 
@@ -417,7 +436,7 @@ if not dataset_df.empty:
             stack_df(stopwords_df),
             feature_attrs,
             tfidfvectorizer_hyperparameters_df,
-            svc_hyperparameters_df,
+            linearsvc_hyperparameters_df,
             n_iter,
             n_splits,
             train_size
@@ -442,13 +461,10 @@ if "training.train.succeed" in st.session_state:
             st.markdown(f'Fitted {randomized_search.n_splits_} folds of {len(cv_results_df)} candidates, finished in {str(timedelta(seconds=st.session_state["training.randomized_search.estimation"]))}.')
 
         st.subheader("Best hyper-parameters")
-        st.dataframe(
-            {
-                k: str(v)
-                for k, v in randomized_search.best_params_.items()
-            },
-            use_container_width=True
-        )
+        st.table({
+            k: str(v)
+            for k, v in randomized_search.best_params_.items()
+        })
 
         st.subheader("Cross Validation results")
         st.dataframe(
@@ -471,7 +487,7 @@ if "training.train.succeed" in st.session_state:
 
         parallel_coordinates_df = cv_results_df.loc[:, [col_name for col_name in cv_results_df.columns if any(x in col_name for x in ["param_", "mean_test_score"])]]
         parallel_coordinates_df = parallel_coordinates_df.rename(lambda col_name: col_name.split("__")[-1] if "param_" in col_name else col_name, axis="columns")
-        parallel_coordinates_df = parallel_coordinates_df.reindex(columns=["ngram_range","min_df","max_df","norm","sublinear_tf","kernel","C","class_weight","decision_function_shape","mean_test_score"])
+        parallel_coordinates_df = parallel_coordinates_df.reindex(columns=["ngram_range","min_df","max_df","norm","sublinear_tf","penalty","loss","dual","tol","C","multi_class","fit_intercept","intercept_scaling","class_weight","max_iter","mean_test_score"])
         parallel_coordinates_df["class_weight"] = parallel_coordinates_df["class_weight"].astype(str)
         parallel_coordinates_df = parallel_coordinates_df.replace({None: "None"})
 
