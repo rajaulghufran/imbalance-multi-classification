@@ -108,21 +108,11 @@ if clf.is_fitted():
         ]:
             key = k.split("__")[-1]
 
-            if k in ["pos_filter__pos", "svc__classes"]:
+            if k in ["pos_filter__pos", "linearsvc__classes"]:
                 hyper_parameters[key] = ", ".join(sorted(v))
 
             elif k == "document_transformer__feat_attrs":
                 hyper_parameters[key] = ".".join(["<"+x+">" for x in v])
-
-            elif k == "svc__class_weight":
-                if model_attrs[k] == model_attrs[f'{k}_']:
-                    hyper_parameters[key] = str(v)
-
-                else:
-                    hyper_parameters[key] = f'{(str(v))}: {str(list(model_attrs[f"{k}_"]))}'
-
-            elif k == "svc__class_weight_":
-                pass
 
             else:
                 hyper_parameters[key] = str(v)
