@@ -80,8 +80,8 @@ class Classification:
             "linearsvc__C": linearsvc.C,
             "linearsvc__multi_class": linearsvc.multi_class,
             "linearsvc__fit_intercept": linearsvc.fit_intercept,
-            "linearsvc__multi_class": linearsvc.multi_class,
             "linearsvc__intercept_scaling": linearsvc.intercept_scaling,
+            "linearsvc__class_weight": linearsvc.class_weight,
             "linearsvc__max_iter": linearsvc.max_iter,
             "linearsvc__classes": linearsvc.classes_
         }
@@ -115,21 +115,21 @@ class Classification:
     ) -> Tuple[RandomizedSearchCV, float]:
         if param_distributions is None:
             param_distributions = {
-                "tfidfvectorizer__ngram_range": ((1, 1), (1, 2), (2, 2)),
-                "tfidfvectorizer__min_df": (0.01, 1, 3, 5, 10),
+                "tfidfvectorizer__ngram_range": ((1, 1), (1, 2), (2, 2), (1, 3), (2, 3), (3, 3)),
+                "tfidfvectorizer__min_df": (1, 3, 5, 10, 25),
                 "tfidfvectorizer__max_df": (0.2, 0.4, 0.6, 0.8, 1.0),
                 "tfidfvectorizer__norm": (None, "l1", "l2"),
                 "tfidfvectorizer__sublinear_tf": (True, False),
                 "linearsvc__penalty": ("l1","l2"),
-                "linearsvc__loss": ("hinge","squared_hinge"),
-                "linearsvc__dual": (True, False),
+                "linearsvc__loss": ("squared_hinge",),
+                "linearsvc__dual": (False,),
                 "linearsvc__tol": (0.0001,),
-                "linearsvc__C": (0.01, 0.1, 1, 10, 100),
+                "linearsvc__C": (0.001, 0.01, 0.1, 1, 10, 100, 1000),
                 "linearsvc__multi_class": ("ovr",),
                 "linearsvc__fit_intercept": (True, False),
-                "linearsvc__intercept_scaling": (1.0,),
+                "linearsvc__intercept_scaling": (0.001, 0.01, 0.1, 1.0, 10, 100, 1000),
                 "linearsvc__class_weight": (None, "balanced"),
-                "linearsvc__max_iter": (1000,)
+                "linearsvc__max_iter": (100000,)
             }
             
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: HYPER-PARAMETERS TUNING')
