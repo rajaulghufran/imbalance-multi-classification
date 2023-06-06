@@ -15,8 +15,8 @@ from util import POS, convert_df, create_vocab_df, delete_state, delete_states, 
 
 TF_IDF_VECTORIZER_DF = pd.DataFrame.from_dict(
     {
-        "ngram_range": ("(1, 1)", "(1, 2)", "(2, 2)"),
-        "min_df": ("0.01","1", "3", "5", "10"),
+        "ngram_range": ("(1, 1)", "(1, 2)", "(2, 2)", "(1, 3)", "(2, 3)", "(3, 3)"),
+        "min_df": ("1", "3", "5", "10", "25"),
         "max_df": ("0.2", "0.4", "0.6", "0.8", "1.0"),
         "norm": ("None", "l1", "l2"),
         "sublinear_tf": ("True", "False")
@@ -26,16 +26,16 @@ TF_IDF_VECTORIZER_DF = pd.DataFrame.from_dict(
 
 LINEARSVC_DF = pd.DataFrame.from_dict(
     {
-        "penalty": ("l1","l2"),
-        "loss": ("hinge","squared_hinge"),
-        "dual": ("True", "False"),
+        "penalty": ("l1","l2",),
+        "loss": ("squared_hinge",),
+        "dual": ("False",),
         "tol": ("0.0001",),
-        "C": ("0.01", "0.1", "1", "10", "100"),
+        "C": ("0.001", "0.01", "0.1", "1", "10", "100", "1000"),
         "multi_class": ("ovr",),
-        "fit_intercept": ("True", "False"),
-        "intercept_scaling": ("1.0",),
+        "fit_intercept": ("True","False"),
+        "intercept_scaling": ("0.001", "0.01", "0.1", "1.0", "10", "100", "1000"),
         "class_weight": ("None", "balanced"),
-        "max_iter": ("1000",)
+        "max_iter": ("100000",)
     },
     orient="index"
 ).transpose()
@@ -155,23 +155,45 @@ def train(
                 val = tuple(restore_dtype(x) for x in v[v.notnull()])
                 hyper_parameters[k] = val
 
-            param_distributions = {
-                "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
-                "tfidfvectorizer__min_df": hyper_parameters["min_df"],
-                "tfidfvectorizer__max_df": hyper_parameters["max_df"],
-                "tfidfvectorizer__norm": hyper_parameters["norm"],
-                "tfidfvectorizer__sublinear_tf": hyper_parameters["sublinear_tf"],
-                "linearsvc__penalty": hyper_parameters["penalty"],
-                "linearsvc__loss": hyper_parameters["loss"],
-                "linearsvc__dual": hyper_parameters["dual"],
-                "linearsvc__tol": hyper_parameters["tol"],
-                "linearsvc__C": hyper_parameters["C"],
-                "linearsvc__multi_class": hyper_parameters["multi_class"],
-                "linearsvc__fit_intercept": hyper_parameters["fit_intercept"],
-                "linearsvc__intercept_scaling": hyper_parameters["intercept_scaling"],
-                "linearsvc__class_weight": hyper_parameters["class_weight"],
-                "linearsvc__max_iter": hyper_parameters["max_iter"]
-            }
+            param_distributions = []
+
+            if "l1" in hyper_parameters["penalty"] and "squared_hinge" in hyper_parameters["loss"]:
+                param_distributions.append({
+                    "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
+                    "tfidfvectorizer__min_df": hyper_parameters["min_df"],
+                    "tfidfvectorizer__max_df": hyper_parameters["max_df"],
+                    "tfidfvectorizer__norm": hyper_parameters["norm"],
+                    "tfidfvectorizer__sublinear_tf": hyper_parameters["sublinear_tf"],
+                    "linearsvc__penalty": ("l1",),
+                    "linearsvc__loss": ("squared_hinge",),
+                    "linearsvc__dual": hyper_parameters["dual"],
+                    "linearsvc__tol": hyper_parameters["tol"],
+                    "linearsvc__C": hyper_parameters["C"],
+                    "linearsvc__multi_class": hyper_parameters["multi_class"],
+                    "linearsvc__fit_intercept": hyper_parameters["fit_intercept"],
+                    "linearsvc__intercept_scaling": hyper_parameters["intercept_scaling"],
+                    "linearsvc__class_weight": hyper_parameters["class_weight"],
+                    "linearsvc__max_iter": hyper_parameters["max_iter"]
+                })
+            
+            if "l2" in hyper_parameters["penalty"]:
+                param_distributions.append({
+                    "tfidfvectorizer__ngram_range": hyper_parameters["ngram_range"],
+                    "tfidfvectorizer__min_df": hyper_parameters["min_df"],
+                    "tfidfvectorizer__max_df": hyper_parameters["max_df"],
+                    "tfidfvectorizer__norm": hyper_parameters["norm"],
+                    "tfidfvectorizer__sublinear_tf": hyper_parameters["sublinear_tf"],
+                    "linearsvc__penalty": ("l2",),
+                    "linearsvc__loss": hyper_parameters["loss"],
+                    "linearsvc__dual": hyper_parameters["dual"],
+                    "linearsvc__tol": hyper_parameters["tol"],
+                    "linearsvc__C": hyper_parameters["C"],
+                    "linearsvc__multi_class": hyper_parameters["multi_class"],
+                    "linearsvc__fit_intercept": hyper_parameters["fit_intercept"],
+                    "linearsvc__intercept_scaling": hyper_parameters["intercept_scaling"],
+                    "linearsvc__class_weight": hyper_parameters["class_weight"],
+                    "linearsvc__max_iter": hyper_parameters["max_iter"]
+                })
 
             randomized_search, estimation = clf.tuning(X_train, y_train, param_distributions, n_iter=n_iter, n_splits=n_splits, train_size=train_size)
 
@@ -467,9 +489,21 @@ if "training.train.succeed" in st.session_state:
         })
 
         st.subheader("Cross Validation results")
+        if st.checkbox("Raw", value=False) == False:
+            cv_results_df = cv_results_df.drop(
+                [
+                    "std_fit_time",
+                    "mean_score_time",
+                    "std_score_time",
+                    "params",
+                    "std_test_score"
+                ],
+                axis=1
+            )
+
         st.dataframe(
             filter_dataframe(
-                cv_results_df,
+                cv_results_df.rename(lambda col_name: col_name.split("__")[-1] if "param_" in col_name else col_name, axis="columns"),
                 "training.cv_results_df"
             ),
             use_container_width=True
