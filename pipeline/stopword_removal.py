@@ -9,11 +9,8 @@ from .data.stopwords import STOPWORDS
 class StopWordRemoval(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        stopwords: Union[None, Union[List[str], Set[str], Tuple[str]]] = None,
-        word_attr: Literal["text", "lemma"] = "lemma"
+        stopwords: Union[None, Union[List[str], Set[str], Tuple[str]]] = None
     ) -> None:
-        self.word_attr = word_attr
-
         if stopwords is None:
             stopwords = STOPWORDS
 
