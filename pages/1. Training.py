@@ -76,7 +76,7 @@ def train(
     categories,
     pos,
     stopwords,
-    feature_attrs,
+    # feature_attrs,
     tfidfvectorizer_hyperparameters_df,
     linearsvc_hyperparameters_df,
     n_iter,
@@ -90,7 +90,7 @@ def train(
         ),
         bool(categories) if targets_col_name != "Select a column" else True,
         bool(pos),
-        bool(feature_attrs),
+        # bool(feature_attrs),
         (
             not tfidfvectorizer_hyperparameters_df["ngram_range"].dropna().empty and
             not tfidfvectorizer_hyperparameters_df["min_df"].dropna().empty and
@@ -139,7 +139,7 @@ def train(
             # clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["text","upos"]})
             # st.session_state["training.X_train.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_train)
 
-            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
+            # clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
             X_train = clf.feature_selection_pipeline.transform(X_train)
             
             # st.session_state["training.X_train.feature_selected"] = X_train
@@ -222,17 +222,17 @@ def train(
         else:
             st.session_state["training.pos.alert.error"] = "Please select at least one part-of-speech."
 
-        if valid[3]:
-            delete_state("training.feature_attrs.alert.error")
-        else:
-            st.session_state["training.feature_attrs.alert.error"] = "Please select at least one word attribute."
+        # if valid[3]:
+        #     delete_state("training.feature_attrs.alert.error")
+        # else:
+        #     st.session_state["training.feature_attrs.alert.error"] = "Please select at least one word attribute."
 
-        if valid[4]:
+        if valid[3]:
             delete_state("training.tfidfvectorizer_hyperparameters.alert.error")
         else:
             st.session_state["training.tfidfvectorizer_hyperparameters.alert.error"] = "Please fill at least one for each parameter."
 
-        if valid[5]:
+        if valid[4]:
             delete_state("training.linearsvc_hyperparameters.alert.error")
         else:
             st.session_state["training.linearsvc_hyperparameters.alert.error"] = """Please fill at least one for each parameter."""
@@ -369,20 +369,20 @@ if not dataset_df.empty:
         mime="text/plain"
     )
 
-    st.header("Feature builder")
-    st.markdown("Build the features based on [word attributes](https://stanfordnlp.github.io/stanza/data_objects.html#word).")
+    # st.header("Feature builder")
+    # st.markdown("Build the features based on [word attributes](https://stanfordnlp.github.io/stanza/data_objects.html#word).")
 
-    feature_attrs = st.multiselect(
-        "_",
-        ["text", "lemma", "upos", "xpos"],
-        ["lemma", "upos"],
-        label_visibility="collapsed"
-    )
+    # feature_attrs = st.multiselect(
+    #     "_",
+    #     ["text", "lemma", "upos", "xpos"],
+    #     ["text"],
+    #     label_visibility="collapsed"
+    # )
     
-    if "training.feature_attrs.alert.error" in st.session_state:
-        st.error(st.session_state["training.feature_attrs.alert.error"])
+    # if "training.feature_attrs.alert.error" in st.session_state:
+    #     st.error(st.session_state["training.feature_attrs.alert.error"])
 
-    st.markdown(f'shape = {".".join(["<"+attr+">"for attr in feature_attrs])}')
+    # st.markdown(f'shape = {".".join(["<"+attr+">"for attr in feature_attrs])}')
 
     st.header("Hyper-parameters")
 
@@ -456,7 +456,7 @@ if not dataset_df.empty:
             categories,
             pos,
             stack_df(stopwords_df),
-            feature_attrs,
+            # feature_attrs,
             tfidfvectorizer_hyperparameters_df,
             linearsvc_hyperparameters_df,
             n_iter,

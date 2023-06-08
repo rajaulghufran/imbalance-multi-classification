@@ -61,7 +61,7 @@ class Classification:
         attrs = {
             "pos_filter__pos": pos_filter.pos,
             "stopword_removal__stopwords": set(stopword_removal.stopwords),
-            "document_transformer__feat_attrs": document_transformer.feat_attrs,
+            # "document_transformer__feat_attrs": document_transformer.feat_attrs,
             "tfidfvectorizer__ngram_range": tfidfvectorizer.ngram_range,
             "tfidfvectorizer__min_df": tfidfvectorizer.min_df,
             "tfidfvectorizer__max_df": tfidfvectorizer.max_df,

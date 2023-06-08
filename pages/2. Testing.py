@@ -94,6 +94,9 @@ if clf.is_fitted():
 
     model_attrs = clf.get_model_attrs()
 
+    st.subheader("Classification categories")
+    st.table(np.array_split(sorted(model_attrs["linearsvc__classes"]), 1))
+
     st.subheader("Hyper-parameters")
     st.markdown("These are parameters that were used to train the model.")
 
@@ -101,24 +104,28 @@ if clf.is_fitted():
 
     for k, v in model_attrs.items():
         if k not in [
+            "pos_filter__pos",
             "stopword_removal__stopwords",
             "tfidfvectorizer__vocabulary",
-            "tfidfvectorizer__stop_words"
+            "tfidfvectorizer__stop_words",
+            "linearsvc__classes"
         ]:
             key = k.split("__")[-1]
 
-            if k in ["pos_filter__pos", "linearsvc__classes"]:
-                hyper_parameters[key] = ", ".join(sorted(v))
+            # if k == "document_transformer__feat_attrs":
+            #     hyper_parameters[key] = ".".join(["<"+x+">" for x in v])
 
-            elif k == "document_transformer__feat_attrs":
-                hyper_parameters[key] = ".".join(["<"+x+">" for x in v])
+            # else:
+            #     hyper_parameters[key] = str(v)
 
-            else:
-                hyper_parameters[key] = str(v)
+            hyper_parameters[key] = str(v)
 
     st.table(hyper_parameters)
 
-    st.subheader("Stopwords list")
+    st.subheader("Filtered Part-of-Speech")
+    st.table(np.array_split(sorted(model_attrs["pos_filter__pos"]), 3))
+
+    st.subheader("Removed Stopwords")
     st.markdown("""
         Terms that were ignored while training the model because they either:
         - manually set by the user
@@ -130,7 +137,7 @@ if clf.is_fitted():
         pd.DataFrame(
             np.array_split(
                 sorted(model_attrs["stopword_removal__stopwords"] | model_attrs["tfidfvectorizer__stop_words"]),
-                6
+                3
             )
         ).transpose(),
         key="testing.stopwords",
