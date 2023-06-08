@@ -1,6 +1,6 @@
 from csv import Sniffer
 from io import StringIO
-from typing import Dict, List
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -136,15 +136,49 @@ def filter_dataframe_single_column(df: pd.DataFrame, key: str, n_splits: int) ->
     return pd.DataFrame(np.array_split(list(df[0]), n_splits)).transpose()
 
 @st.cache_data
-def get_term_doc_freq_df(X):
-    terms = {}
+def get_term_doc_freq_df(X, ngram_range: Optional[Tuple[int, int]] = None, stopwords: Optional[List[str]] = None):
+    if ngram_range is None:
+        terms = {}
 
-    for x in X:
-        for t in set(x):
-            if t in terms:
-                terms[t] = terms[t] + 1
-            else:
-                terms[t] = 1
+        for x in X:
+            for t in set(x):
+                if t in terms:
+                    terms[t] = terms[t] + 1
+                else:
+                    terms[t] = 1
+
+    # hacky stuff
+    else:
+        terms = {}
+        min_n, max_n = ngram_range
+
+        for x in X:
+            for i in range(len(x)):
+                try:
+                    t = " ".join([x[i+j] for j in range(min_n)])
+
+                    if t in terms:
+                        terms[t] = terms[t] + 1
+                    else:
+                        terms[t] = 1
+ 
+                except IndexError:
+                    pass
+
+                for k in range(max_n):
+                    if k + 1 > min_n: 
+                        try:
+                            t = " ".join([x[i+h] for h in range(k+1)])
+                            
+                            if t in terms:
+                                terms[t] = terms[t] + 1
+                            else:
+                                terms[t] = 1
+        
+                        except IndexError:
+                            pass
+        
+        terms = {k: v for k, v in terms.items() if k not in stopwords}
 
     terms = {k: v for k, v in sorted(terms.items(), key=lambda item: item[1], reverse=True)}
 
