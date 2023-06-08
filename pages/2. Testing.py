@@ -34,14 +34,13 @@ def test(dataset_df):
         with st.spinner("Text Preprocessing..."):
             X_test = clf.text_preprocessing_pipeline.transform(X_test)
 
-            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["lemma","upos"]})
-            st.session_state["testing.X_test.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_test, verbose__=False)
-            
-        clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
-
+            # clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["text","upos"]})
+            # st.session_state["testing.X_test.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_test, verbose__=False)
+        
         with st.spinner("Feature Selection..."):
+            clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
             X_test = clf.feature_selection_pipeline.transform(X_test)
-            st.session_state["testing.X_test.feature_selected"] = X_test
+            # st.session_state["testing.X_test.feature_selected"] = X_test
 
         with st.spinner("Prediction..."):
             y_pred = clf.test_preprocessed(X_test)
@@ -262,118 +261,118 @@ if clf.is_fitted():
 
         st.header("Model Evaluation")
 
-        st.subheader("Terms & Document Frequencies")
+        # st.subheader("Filtered POS")
 
-        tab1, tab2 = st.tabs(["Pre-feature selection","Post-feature selection"])
+        # tab1, tab2 = st.tabs(["Keep","Removed"])
 
-        with tab1:
-            length, pre_tdf_df = get_term_doc_freq_df([[word.split(".")[0] for word in document] for document in st.session_state["testing.X_test.preprocessed"]])
+        # terms = {}
+
+        # for document in st.session_state["testing.X_test.preprocessed"]:
+        #     for token in document:
+        #         if token in terms:
+        #             terms[token] += 1
+        #         else:
+        #             terms[token] = 1
+
+        # terms = {k: v for k, v in sorted(terms.items(), key=lambda item: item[1], reverse=True)}
+
+        # filtered_pos_df = pd.DataFrame.from_dict({
+        #     "Terms": [token.split(".")[0] for token in list(terms.keys())],
+        #     "POS": [token.split(".")[1] for token in list(terms.keys())],
+        #     "Freq": list(terms.values())
+        # })
+
+        # with tab1:
+        #     keep_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(model_attrs["pos_filter__pos"])]
             
-            st.markdown(f"n_unique={length}")
+        #     st.markdown(f"n_unique={len(keep_pos_df)}")
 
-            st.dataframe(
-                filter_dataframe(
-                    pre_tdf_df,
-                    key="testing.pre_tdf_df"
-                ),
-                use_container_width=True
-            )
+        #     st.dataframe(
+        #         filter_dataframe(
+        #             keep_pos_df,
+        #             key="testing.keep_pos_df"
+        #         ),
+        #         use_container_width=True
+        #     )
 
-            st.download_button(
-                "Download",
-                convert_df(pre_tdf_df),
-                file_name="terms_document_frequencies.csv",
-                mime="text/csv",
-                key="testing.pre_tdf_df.download"
-            )
+        #     st.download_button(
+        #         "Download",
+        #         convert_df(keep_pos_df),
+        #         file_name="keep_pos.csv",
+        #         mime="text/csv",
+        #         key="testing.keep_pos_df.download"
+        #     )
 
-        with tab2:
-            length, post_tdf_df = get_term_doc_freq_df(st.session_state["testing.X_test.feature_selected"])
+        #     st.divider()
+
+        # with tab2:
+        #     removed_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(set(POS["tags"]) - set(model_attrs["pos_filter__pos"]))]
             
-            st.markdown(f"n_unique={length}")
+        #     st.markdown(f"n_unique={len(removed_pos_df)}")
 
-            st.dataframe(
-                filter_dataframe(
-                    post_tdf_df,
-                    key="testing.post_tdf_df"
-                ),
-                use_container_width=True
-            )
+        #     st.dataframe(
+        #         filter_dataframe(
+        #             removed_pos_df,
+        #             key="testing.removed_pos_df"
+        #         ),
+        #         use_container_width=True
+        #     )
 
-            st.download_button(
-                "Download",
-                convert_df(post_tdf_df),
-                file_name="terms_document_frequencies.csv",
-                mime="text/csv",
-                key="testing.post_tdf_df.download"
-            )
+        #     st.download_button(
+        #         "Download",
+        #         convert_df(removed_pos_df),
+        #         file_name="removed_pos.csv",
+        #         mime="text/csv",
+        #         key="testing.removed_pos_df.download"
+        #     )
 
-        st.subheader("Filtered POS")
+        #     st.divider()
 
-        tab1, tab2 = st.tabs(["Keep","Removed"])
+        # st.subheader("Terms & Document Frequencies")
 
-        terms = {}
+        # tab1, tab2 = st.tabs(["Pre-feature selection","Post-feature selection"])
 
-        for document in st.session_state["testing.X_test.preprocessed"]:
-            for token in document:
-                if token in terms:
-                    terms[token] += 1
-                else:
-                    terms[token] = 1
-
-        terms = {k: v for k, v in sorted(terms.items(), key=lambda item: item[1], reverse=True)}
-
-        filtered_pos_df = pd.DataFrame.from_dict({
-            "Terms": [token.split(".")[0] for token in list(terms.keys())],
-            "POS": [token.split(".")[1] for token in list(terms.keys())],
-            "Freq": list(terms.values())
-        })
-
-        with tab1:
-            keep_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(model_attrs["pos_filter__pos"])]
+        # with tab1:
+        #     length, pre_tdf_df = get_term_doc_freq_df([[word.split(".")[0] for word in document] for document in st.session_state["testing.X_test.preprocessed"]])
             
-            st.markdown(f"n_unique={len(keep_pos_df)}")
+        #     st.markdown(f"n_unique={length}")
 
-            st.dataframe(
-                filter_dataframe(
-                    keep_pos_df,
-                    key="testing.keep_pos_df"
-                ),
-                use_container_width=True
-            )
+        #     st.dataframe(
+        #         filter_dataframe(
+        #             pre_tdf_df,
+        #             key="testing.pre_tdf_df"
+        #         ),
+        #         use_container_width=True
+        #     )
 
-            st.download_button(
-                "Download",
-                convert_df(keep_pos_df),
-                file_name="keep_pos.csv",
-                mime="text/csv",
-                key="testing.keep_pos_df.download"
-            )
+        #     st.download_button(
+        #         "Download",
+        #         convert_df(pre_tdf_df),
+        #         file_name="terms_document_frequencies.csv",
+        #         mime="text/csv",
+        #         key="testing.pre_tdf_df.download"
+        #     )
 
-            st.divider()
-
-        with tab2:
-            removed_pos_df = filtered_pos_df[filtered_pos_df["POS"].isin(set(POS["tags"]) - set(model_attrs["pos_filter__pos"]))]
+        # with tab2:
+        #     length, post_tdf_df = get_term_doc_freq_df(st.session_state["testing.X_test.feature_selected"], ngram_range=model_attrs["tfidfvectorizer__ngram_range"], stopwords=model_attrs["tfidfvectorizer__stop_words"])
             
-            st.markdown(f"n_unique={len(removed_pos_df)}")
+        #     st.markdown(f"n_unique={length}")
 
-            st.dataframe(
-                filter_dataframe(
-                    removed_pos_df,
-                    key="testing.removed_pos_df"
-                ),
-                use_container_width=True
-            )
+        #     st.dataframe(
+        #         filter_dataframe(
+        #             post_tdf_df,
+        #             key="testing.post_tdf_df"
+        #         ),
+        #         use_container_width=True
+        #     )
 
-            st.download_button(
-                "Download",
-                convert_df(removed_pos_df),
-                file_name="removed_pos.csv",
-                mime="text/csv",
-                key="testing.removed_pos_df.download"
-            )
-
-            st.divider()
+        #     st.download_button(
+        #         "Download",
+        #         convert_df(post_tdf_df),
+        #         file_name="terms_document_frequencies.csv",
+        #         mime="text/csv",
+        #         key="testing.post_tdf_df.download"
+        #     )
         
         if "testing.y_test" in st.session_state:
             if (
