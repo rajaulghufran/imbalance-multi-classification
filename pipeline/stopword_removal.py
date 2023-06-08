@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Literal, Set, Tuple, Union
+from typing import List, Set, Tuple, Union
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from stanza.models.common.doc import Document, Sentence, Token, Word
@@ -9,18 +9,21 @@ from .data.stopwords import STOPWORDS
 class StopWordRemoval(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        stopwords: Union[None, Union[List[str], Set[str], Tuple[str]]] = None
+        stopwords: Union[None, Union[List[str], Set[str], Tuple[str]]] = None,
+        verbose: int = 1
     ) -> None:
         if stopwords is None:
             stopwords = STOPWORDS
 
+        self.verbose = verbose
         self.stopwords = [x.lower() for x in stopwords]
 
     def fit(self, X, y=None):
         return self
     
     def transform(self, X: List[Document], y=None) -> List[Document]:
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: STOPWORD REMOVAL')
+        if self.verbose > 1:
+            print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: STOPWORD REMOVAL')
 
         X_documents = X.copy()
 
@@ -34,9 +37,12 @@ class StopWordRemoval(BaseEstimator, TransformerMixin):
                     words: List[Word] = token.words
 
                     for wi, word in enumerate(words):
-                        lemma: str = word.lemma
+                        word_dict = word.to_dict()
 
-                        if lemma.lower() in self.stopwords:
+                        if any(
+                            word_dict.get(attr) in self.stopwords
+                            for attr in ["lemma", "text"]
+                        ):
                             del X_documents[di].sentences[si].tokens[ti].words[wi]
 
         return X_documents

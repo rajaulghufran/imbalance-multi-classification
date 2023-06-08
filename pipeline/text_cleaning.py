@@ -9,11 +9,15 @@ from .data.emoticons import EMOTICON_PATTERNS
 from .data.sub_patterns import SUB_PATTERNS_1, SUB_PATTERNS_2
 
 class TextCleaning(BaseEstimator, TransformerMixin):
+    def __init__(self, verbose: int = 1) -> None:
+        self.verbose = verbose
+
     def fit(self, X, y=None):
         return self
     
     def transform(self, X: List[str], y=None) -> List[str]:
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: TEXT CLEANING')
+        if self.verbose > 0:
+            print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: TEXT CLEANING')
 
         X_cleaned: List[str] = []
 

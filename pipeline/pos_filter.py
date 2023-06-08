@@ -4,11 +4,12 @@ from typing import List
 from sklearn.base import BaseEstimator, TransformerMixin
 from stanza.models.common.doc import Document, Sentence, Token, Word
 
-POS = set(["ADJ","ADP","ADV","AUX","CONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"])
+POS = set(["ADJ","ADP","ADV","AUX","CCONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"])
 
 class POSFilter(BaseEstimator, TransformerMixin):
-    def __init__(self, pos=None) -> None:
+    def __init__(self, pos=None, verbose: int = 1) -> None:
         self.pos = pos
+        self.verbose = verbose
 
         if self.pos is None:
             self.pos = POS
@@ -17,7 +18,8 @@ class POSFilter(BaseEstimator, TransformerMixin):
         return self
     
     def transform(self, X: List[Document], y=None) -> List[Document]:
-        print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: POS REMOVAL')
+        if self.verbose > 0:
+            print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: POS REMOVAL')
 
         X_documents = X.copy()
 

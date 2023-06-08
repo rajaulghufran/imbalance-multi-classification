@@ -5,20 +5,21 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from stanza.models.common.doc import Document, Sentence, Token, Word
 
 class DocumentTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, feat_attrs: Union[None, List[str]] = None):
+    def __init__(self, feat_attrs: Union[None, List[str]] = None, verbose: int = 1):
         # reduce stanza document to a sequence of word properties joined by dot (.)
         # see https://stanfordnlp.github.io/stanza/data_objects.html on word properties
 
         self.feat_attrs = feat_attrs
+        self.verbose = verbose
 
         if self.feat_attrs is None:
-            self.feat_attrs = ["lemma"]
+            self.feat_attrs = ["text"]
 
     def fit(self, X, y=None):
         return self
     
-    def transform(self, X: List[Document], y=None, verbose__: bool = True) -> List[List[str]]:
-        if verbose__:
+    def transform(self, X: List[Document], y=None) -> List[List[str]]:
+        if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: DOCUMENT TRANSFORMER')
 
         X_documents: List[List[str]] = []
@@ -40,7 +41,7 @@ class DocumentTransformer(BaseEstimator, TransformerMixin):
                                 str(
                                     word
                                     .to_dict()
-                                    .get(key, None)
+                                    .get(key)
                                 )
                                 for key in self.feat_attrs
                             ])
