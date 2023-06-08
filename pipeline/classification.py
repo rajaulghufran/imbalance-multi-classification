@@ -8,20 +8,17 @@ from typing import Dict, List, Literal, Tuple, Union
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import make_scorer, accuracy_score, matthews_corrcoef
 from sklearn.model_selection import RandomizedSearchCV
-from sklearn.model_selection import StratifiedShuffleSplit
+from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
 from sklearn.svm import LinearSVC
-from sklearnex import config_context
-from sklearnex.model_selection import train_test_split
 
 from .document_transformer import DocumentTransformer
 from .pos_filter import POSFilter
 from .stopword_removal import StopWordRemoval
 from .text_cleaning import TextCleaning
 from .tokenize_mwt_pos_lemma import TokenizeMWTPOSLemma
-# from .usm_ndarray_transformer import USMndarrayTransformer
 
 def fun(arg):
     return arg
@@ -51,7 +48,6 @@ class Classification:
 
         self.classification_pipeline: Pipeline = Pipeline([
             ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
-            # ("usm_ndarray_transformer", USMndarrayTransformer()),
             ("linearsvc", LinearSVC(random_state=42)),
         ])
 
@@ -147,8 +143,7 @@ class Classification:
 
         t0 = time()
 
-        with config_context(target_offload="auto", allow_fallback_to_host=True):
-            randomized_search.fit(X_train, y_train)
+        randomized_search.fit(X_train, y_train)
 
         return (randomized_search, time() - t0)
 
@@ -157,14 +152,11 @@ class Classification:
         X_train = self.feature_selection_pipeline.transform(X_train)
 
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TRAINING')
-        with config_context(target_offload="auto", allow_fallback_to_host=True):
-            self.classification_pipeline.fit(X_train, y_train)
+        self.classification_pipeline.fit(X_train, y_train)
 
     def train_preprocessed(self, X_train: Iterable, y_train: Iterable) -> None:
         print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: MODEL TRAINING')
-
-        with config_context(target_offload="auto", allow_fallback_to_host=True):
-            self.classification_pipeline.fit(X_train, y_train)
+        self.classification_pipeline.fit(X_train, y_train)
     
     def test(self, X_test: Iterable) -> Iterable[int]:
         X_test = self.text_preprocessing_pipeline.transform(X_test)
