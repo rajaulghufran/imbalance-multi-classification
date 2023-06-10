@@ -8,7 +8,7 @@ from typing import Dict, List, Literal, Tuple, Union
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics import make_scorer, accuracy_score, matthews_corrcoef
 from sklearn.model_selection import RandomizedSearchCV
-from sklearn.model_selection import StratifiedShuffleSplit, train_test_split
+from sklearn.model_selection import StratifiedShuffleSplit
 from sklearn.pipeline import Pipeline
 from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
@@ -61,7 +61,7 @@ class Classification:
         attrs = {
             "pos_filter__pos": pos_filter.pos,
             "stopword_removal__stopwords": set(stopword_removal.stopwords),
-            # "document_transformer__feat_attrs": document_transformer.feat_attrs,
+            "document_transformer__feat_attrs": document_transformer.feat_attrs,
             "tfidfvectorizer__ngram_range": tfidfvectorizer.ngram_range,
             "tfidfvectorizer__min_df": tfidfvectorizer.min_df,
             "tfidfvectorizer__max_df": tfidfvectorizer.max_df,
@@ -83,20 +83,6 @@ class Classification:
         }
 
         return attrs
-
-    def train_test_split(
-        self,
-        X: Iterable,
-        y: Iterable,
-        test_size: float = .2
-    ) -> Tuple[Iterable, Iterable, Iterable, Iterable]:
-        return train_test_split(
-            X,
-            y,
-            test_size=test_size,
-            random_state=42,
-            stratify=y
-        )
 
     def tuning(
         self,
