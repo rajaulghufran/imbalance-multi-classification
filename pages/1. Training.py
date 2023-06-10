@@ -375,7 +375,7 @@ if not dataset_df.empty:
     feature_attrs = st.multiselect(
         "_",
         ["text", "lemma", "upos", "xpos"],
-        ["text"],
+        ["lemma", "upos"],
         label_visibility="collapsed"
     )
     
