@@ -12,7 +12,7 @@ class POSFilter(BaseEstimator, TransformerMixin):
             pos: Union[int, None, Union[List[str], Set[str], Tuple[str]]] = -1,
             verbose: int = 1
         ) -> None:
-        if self.pos == -1:
+        if pos == -1:
             self.pos = POS
         else:
             self.pos = pos
