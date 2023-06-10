@@ -9,14 +9,15 @@ from .data.stopwords import STOPWORDS
 class StopWordRemoval(BaseEstimator, TransformerMixin):
     def __init__(
         self,
-        stopwords: Union[None, Union[List[str], Set[str], Tuple[str]]] = None,
+        stopwords: Union[int, None, Union[List[str], Set[str], Tuple[str]]] = -1,
         verbose: int = 1
     ) -> None:
-        if stopwords is None:
-            stopwords = STOPWORDS
+        if stopwords == -1:
+            self.stopwords = [x.lower() for x in STOPWORDS]
+        else:
+            self.stopwords = stopwords
 
         self.verbose = verbose
-        self.stopwords = [x.lower() for x in stopwords]
 
     def fit(self, X, y=None):
         return self
@@ -27,22 +28,24 @@ class StopWordRemoval(BaseEstimator, TransformerMixin):
 
         X_documents = X.copy()
 
-        for di, document in enumerate(X_documents):
-            sentences: List[Sentence] = document.sentences
+        if self.stopwords is not None:
 
-            for si, sentence in enumerate(sentences):
-                tokens: List[Token] = sentence.tokens
+            for di, document in enumerate(X_documents):
+                sentences: List[Sentence] = document.sentences
 
-                for ti, token in enumerate(tokens):
-                    words: List[Word] = token.words
+                for si, sentence in enumerate(sentences):
+                    tokens: List[Token] = sentence.tokens
 
-                    for wi, word in enumerate(words):
-                        word_dict = word.to_dict()
+                    for ti, token in enumerate(tokens):
+                        words: List[Word] = token.words
 
-                        if any(
-                            word_dict.get(attr) in self.stopwords
-                            for attr in ["lemma", "text"]
-                        ):
-                            del X_documents[di].sentences[si].tokens[ti].words[wi]
+                        for wi, word in enumerate(words):
+                            word_dict = word.to_dict()
+
+                            if any(
+                                word_dict.get(attr) in self.stopwords
+                                for attr in ["lemma", "text"]
+                            ):
+                                del X_documents[di].sentences[si].tokens[ti].words[wi]
 
         return X_documents

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List
+from typing import List, Set, Tuple, Union
 
 from sklearn.base import BaseEstimator, TransformerMixin
 from stanza.models.common.doc import Document, Sentence, Token, Word
@@ -7,12 +7,17 @@ from stanza.models.common.doc import Document, Sentence, Token, Word
 POS = set(["ADJ","ADP","ADV","AUX","CCONJ","DET","INTJ","NOUN","NUM","PART","PRON","PROPN","PUNCT","SCONJ","SYM","VERB","X"])
 
 class POSFilter(BaseEstimator, TransformerMixin):
-    def __init__(self, pos=None, verbose: int = 1) -> None:
-        self.pos = pos
-        self.verbose = verbose
-
-        if self.pos is None:
+    def __init__(
+            self,
+            pos: Union[int, None, Union[List[str], Set[str], Tuple[str]]] = -1,
+            verbose: int = 1
+        ) -> None:
+        if self.pos == -1:
             self.pos = POS
+        else:
+            self.pos = pos
+
+        self.verbose = verbose
 
     def fit(self, X, y=None):
         return self

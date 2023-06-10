@@ -9,12 +9,13 @@ class DocumentTransformer(BaseEstimator, TransformerMixin):
         # reduce stanza document to a sequence of word properties joined by dot (.)
         # see https://stanfordnlp.github.io/stanza/data_objects.html on word properties
 
-        self.feat_attrs = feat_attrs
-        self.verbose = verbose
-
         if self.feat_attrs is None:
             self.feat_attrs = ["text"]
-
+        else:
+            self.feat_attrs = feat_attrs
+        
+        self.verbose = verbose
+        
     def fit(self, X, y=None):
         return self
     
