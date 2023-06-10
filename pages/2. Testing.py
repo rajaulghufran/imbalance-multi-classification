@@ -106,21 +106,17 @@ if clf.is_fitted():
         if k not in [
             "pos_filter__pos",
             "stopword_removal__stopwords",
+            "document_transformer__feat_attrs",
             "tfidfvectorizer__vocabulary",
             "tfidfvectorizer__stop_words",
             "linearsvc__classes"
         ]:
             key = k.split("__")[-1]
-
-            # if k == "document_transformer__feat_attrs":
-            #     hyper_parameters[key] = ".".join(["<"+x+">" for x in v])
-
-            # else:
-            #     hyper_parameters[key] = str(v)
-
             hyper_parameters[key] = str(v)
 
     st.table(hyper_parameters)
+
+    st.subheader(f'Feature shape: {".".join(["<"+x+">" for x in model_attrs["document_transformer__feat_attrs"]])}')
 
     st.subheader("Filtered Part-of-Speech")
     st.table(np.array_split(sorted(model_attrs["pos_filter__pos"]), 3))
