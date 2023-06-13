@@ -8,10 +8,10 @@ POS = set(["ADJ","ADP","ADV","AUX","CCONJ","DET","INTJ","NOUN","NUM","PART","PRO
 
 class POSFilter(BaseEstimator, TransformerMixin):
     def __init__(
-            self,
-            pos: Union[int, None, Union[List[str], Set[str], Tuple[str]]] = -1,
-            verbose: int = 1
-        ) -> None:
+        self,
+        pos: Union[int, None, Union[List[str], Set[str], Tuple[str]]] = -1,
+        verbose: int = 1
+    ) -> None:
         if pos == -1:
             self.pos = POS
         else:
@@ -19,8 +19,8 @@ class POSFilter(BaseEstimator, TransformerMixin):
 
         self.verbose = verbose
 
-    def fit(self, X, y=None):
-        return self
+        def fit(self, X, y=None):
+            return self
     
     def transform(self, X: List[Document], y=None) -> List[Document]:
         if self.verbose > 0:
