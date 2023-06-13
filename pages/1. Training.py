@@ -338,7 +338,7 @@ if not dataset_df.empty:
     pos = st.multiselect(
         "_",
         options=POS["tags"],
-        default=POS["tags"],
+        default=["ADJ", "ADV", "NOUN", "PART", "VERB"],
         label_visibility="collapsed"
     )
 
@@ -642,36 +642,36 @@ if "training.train.succeed" in st.session_state:
 
     #     st.divider()
 
-    st.subheader("TF-IDF Vectorizer Stopwords")
+    # st.subheader("TF-IDF Vectorizer Stopwords")
     
-    st.markdown("""
-        Terms that were ignored by TF-IDF Vectorizer because they either:
-        - occured in too few documents (min_df)
-        - occured in too many documents (max_df)
-    """)
+    # st.markdown("""
+    #     Terms that were ignored by TF-IDF Vectorizer because they either:
+    #     - occured in too few documents (min_df)
+    #     - occured in too many documents (max_df)
+    # """)
     
-    tfidfvectorizer_stopwords_df = filter_dataframe_single_column(
-        pd.DataFrame(
-            np.array_split(
-                sorted(model_attrs["tfidfvectorizer__stop_words"]),
-                6
-            )
-        ).transpose(),
-        key="training.tfidfvectorizer.stopwords",
-        n_splits=6
-    )
+    # tfidfvectorizer_stopwords_df = filter_dataframe_single_column(
+    #     pd.DataFrame(
+    #         np.array_split(
+    #             sorted(model_attrs["tfidfvectorizer__stop_words"]),
+    #             6
+    #         )
+    #     ).transpose(),
+    #     key="training.tfidfvectorizer.stopwords",
+    #     n_splits=6
+    # )
     
-    st.dataframe(
-        tfidfvectorizer_stopwords_df,
-        use_container_width=True
-    )
+    # st.dataframe(
+    #     tfidfvectorizer_stopwords_df,
+    #     use_container_width=True
+    # )
 
-    st.download_button(
-        "Download TF-IDF Vectorizer Stopwords",
-        "\n".join(stack_df(tfidfvectorizer_stopwords_df)),
-        file_name="tfidfvectorizer_stopwords.txt",
-        mime="text/plain"
-    )
+    # st.download_button(
+    #     "Download TF-IDF Vectorizer Stopwords",
+    #     "\n".join(stack_df(tfidfvectorizer_stopwords_df)),
+    #     file_name="tfidfvectorizer_stopwords.txt",
+    #     mime="text/plain"
+    # )
 
     st.subheader("TF-IDF Vectorizer Vocabulary")
     

@@ -35,7 +35,7 @@ def test(dataset_df):
             X_test = clf.text_preprocessing_pipeline.transform(X_test)
 
             # clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": ["text","upos"]})
-            # st.session_state["testing.X_test.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_test, verbose__=False)
+            # st.session_state["testing.X_test.preprocessed"] = clf.feature_selection_pipeline.named_steps["document_transformer"].transform(X_test)
         
         with st.spinner("Feature Selection..."):
             clf.feature_selection_pipeline.named_steps["document_transformer"].set_params(**{"feat_attrs": feature_attrs})
