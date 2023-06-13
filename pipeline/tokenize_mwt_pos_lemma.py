@@ -12,6 +12,8 @@ class TokenizeMWTPOSLemma(BaseEstimator, TransformerMixin):
         if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: DOWNLOAD STANZA MODEL')
 
+        stanza.download(lang="id", resources_version="1.5.1")
+
         if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: LOAD STANZA PIPELINE: tokenize,mwt,pos,lemma')
 
