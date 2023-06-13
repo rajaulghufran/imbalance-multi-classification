@@ -262,7 +262,8 @@ if clf.is_fitted():
         st.title("Results")
         st.markdown("#### Predictions have been added to the dataset!")
 
-        st.header("Model Evaluation")
+        if "testing.y_test" in st.session_state:
+            st.header("Model Evaluation")
 
         # st.subheader("Filtered POS")
 
