@@ -14,6 +14,7 @@ from sklearn.utils.validation import check_is_fitted
 from sklearn.exceptions import NotFittedError
 from sklearn.svm import LinearSVC
 
+from .data.stopwords import STOPWORDS
 from .document_transformer import DocumentTransformer
 from .pos_filter import POSFilter
 from .stopword_removal import StopWordRemoval
@@ -31,9 +32,9 @@ class Classification:
         ])
 
         self.feature_selection_pipeline: Pipeline = Pipeline([
-            ("pos_filter", POSFilter()),
-            ("stopword_removal", StopWordRemoval()),
-            ("document_transformer", DocumentTransformer())
+            ("pos_filter", POSFilter(**{"pos": ("ADJ","ADV","NOUN","PART","VERB")})),
+            ("stopword_removal", StopWordRemoval(**{"stopwords": STOPWORDS})),
+            ("document_transformer", DocumentTransformer(**{"feat_attrs": ["lemma","upos"]}))
         ])
 
         tfidfvectorizer_hyperparameters = {
@@ -44,11 +45,30 @@ class Classification:
             "tokenizer": fun,
             "analyzer": "word",
             "token_pattern": None,
+            "ngram_range": (1, 1),
+            "min_df": 1,
+            "max_df": 1.0,
+            "norm": "l2",
+            "sublinear_tf": False
+        }
+
+        linearsvc_hyperparameters = {
+            "loss": "squared_hinge",
+            "dual": False,
+            "multi_class": "ovr",
+            "random_state": 42,
+            "tol": 0.0001,
+            "penalty": "l2",
+            "C": 1,
+            "fit_intercept": True,
+            "intercept_scaling": 1.0,
+            "class_weight": "balanced",
+            "max_iter": 1000000
         }
 
         self.classification_pipeline: Pipeline = Pipeline([
             ("tfidfvectorizer", TfidfVectorizer(**tfidfvectorizer_hyperparameters)),
-            ("linearsvc", LinearSVC(random_state=42)),
+            ("linearsvc", LinearSVC(**linearsvc_hyperparameters)),
         ])
 
     def get_model_attrs(self):
