@@ -19,8 +19,8 @@ class POSFilter(BaseEstimator, TransformerMixin):
 
         self.verbose = verbose
 
-        def fit(self, X, y=None):
-            return self
+    def fit(self, X, y=None):
+        return self
     
     def transform(self, X: List[Document], y=None) -> List[Document]:
         if self.verbose > 0:
@@ -28,17 +28,18 @@ class POSFilter(BaseEstimator, TransformerMixin):
 
         X_documents = X.copy()
 
-        for di, document in enumerate(X):
-            sentences: List[Sentence] = document.sentences
+        if self.pos:
+            for di, document in enumerate(X):
+                sentences: List[Sentence] = document.sentences
 
-            for si, sentence in enumerate(sentences):
-                tokens: List[Token] = sentence.tokens
+                for si, sentence in enumerate(sentences):
+                    tokens: List[Token] = sentence.tokens
 
-                for ti, token in enumerate(tokens):
-                    words: List[Word] = token.words
+                    for ti, token in enumerate(tokens):
+                        words: List[Word] = token.words
 
-                    for wi, word in enumerate(words):
-                        if word.pos not in self.pos:
-                            del X_documents[di].sentences[si].tokens[ti].words[wi]
+                        for wi, word in enumerate(words):
+                            if word.pos not in self.pos:
+                                del X_documents[di].sentences[si].tokens[ti].words[wi]
 
         return X_documents
