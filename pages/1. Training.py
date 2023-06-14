@@ -129,8 +129,8 @@ def train(
         X_train = list(dataset_df[texts_col_name])
         y_train = list(dataset_df[targets_col_name])
 
-        clf.feature_selection_pipeline.named_steps["stopword_removal"].set_params(**{"stopwords": set(stopwords)})
-        clf.feature_selection_pipeline.named_steps["pos_filter"].set_params(**{"pos": set(pos)})
+        clf.feature_selection_pipeline.named_steps["pos_filter"].set_params(**{"pos": pos})
+        clf.feature_selection_pipeline.named_steps["stopword_removal"].set_params(**{"stopwords": stopwords})
     
         with st.spinner("Text Preprocessing..."):
             X_train = clf.text_preprocessing_pipeline.transform(X_train)
@@ -143,6 +143,10 @@ def train(
             X_train = clf.feature_selection_pipeline.transform(X_train)
             
             # st.session_state["training.X_train.feature_selected"] = X_train
+
+        # print(clf.feature_selection_pipeline.named_steps["pos_filter"].get_params()["pos"])
+        # print(len(clf.feature_selection_pipeline.named_steps["stopword_removal"].get_params()["stopwords"]))
+        # print(clf.feature_selection_pipeline.named_steps["document_transformer"].get_params()["feat_attrs"])
 
         with st.spinner("Hyperparameters tuning..."):
             hyper_parameters = {}
@@ -573,7 +577,7 @@ if "training.train.succeed" in st.session_state:
         mime="application/octet-stream"
     )
 
-    model_attrs = clf.get_model_attrs()
+    # model_attrs = clf.get_model_attrs()
 
     # st.subheader("Filtered POS")
 
@@ -673,30 +677,30 @@ if "training.train.succeed" in st.session_state:
     #     mime="text/plain"
     # )
 
-    st.subheader("TF-IDF Vectorizer Vocabulary")
+    # st.subheader("TF-IDF Vectorizer Vocabulary")
     
-    st.markdown(f"""
-        Features that were used to train the classifier.  
-        length = {len(model_attrs["tfidfvectorizer__vocabulary"])}
-    """)
+    # st.markdown(f"""
+    #     Features that were used to train the classifier.  
+    #     length = {len(model_attrs["tfidfvectorizer__vocabulary"])}
+    # """)
 
-    tfidfvectorizer_vocabulary_df = filter_dataframe_single_column(
-        create_vocab_df(model_attrs["tfidfvectorizer__vocabulary"]),
-        key="training.tfidfvectorizer.vocabulary",
-        n_splits=3
-    )
+    # tfidfvectorizer_vocabulary_df = filter_dataframe_single_column(
+    #     create_vocab_df(model_attrs["tfidfvectorizer__vocabulary"]),
+    #     key="training.tfidfvectorizer.vocabulary",
+    #     n_splits=3
+    # )
     
-    st.dataframe(
-        tfidfvectorizer_vocabulary_df,
-        use_container_width=True
-    )
+    # st.dataframe(
+    #     tfidfvectorizer_vocabulary_df,
+    #     use_container_width=True
+    # )
 
-    st.download_button(
-        "Download TF-IDF Vectorizer Vocabulary",
-        "\n".join(stack_df(tfidfvectorizer_vocabulary_df)),
-        file_name="tfidfvectorizer_vocabulary.txt",
-        mime="text/plain"
-    )
+    # st.download_button(
+    #     "Download TF-IDF Vectorizer Vocabulary",
+    #     "\n".join(stack_df(tfidfvectorizer_vocabulary_df)),
+    #     file_name="tfidfvectorizer_vocabulary.txt",
+    #     mime="text/plain"
+    # )
 
     # st.subheader("Terms & Document Frequencies")
 
