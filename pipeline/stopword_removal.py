@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from typing import List, Set, Tuple, Union
 
@@ -26,7 +27,7 @@ class StopWordRemoval(BaseEstimator, TransformerMixin):
         if self.verbose > 1:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: STOPWORD REMOVAL')
 
-        X_documents = X.copy()
+        X_documents = copy.deepcopy(X)
 
         if self.stopwords is not None:
 

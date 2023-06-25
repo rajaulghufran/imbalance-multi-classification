@@ -1,3 +1,4 @@
+import copy
 from datetime import datetime
 from typing import List, Set, Tuple, Union
 
@@ -26,10 +27,10 @@ class POSFilter(BaseEstimator, TransformerMixin):
         if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: POS REMOVAL')
 
-        X_documents = X.copy()
+        X_documents = copy.deepcopy(X)
 
         if self.pos:
-            for di, document in enumerate(X):
+            for di, document in enumerate(X_documents):
                 sentences: List[Sentence] = document.sentences
 
                 for si, sentence in enumerate(sentences):
@@ -39,7 +40,7 @@ class POSFilter(BaseEstimator, TransformerMixin):
                         words: List[Word] = token.words
 
                         for wi, word in enumerate(words):
-                            if word.pos not in self.pos:
+                            if word.upos not in self.pos:
                                 del X_documents[di].sentences[si].tokens[ti].words[wi]
 
         return X_documents
