@@ -17,7 +17,7 @@ class TokenizeMWTPOSLemma(BaseEstimator, TransformerMixin):
         if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: LOAD STANZA PIPELINE: tokenize,mwt,pos,lemma')
 
-        self.tokenizer = stanza.Pipeline("id", processors="tokenize,mwt,pos,lemma", use_gpu=True)
+        self.pipeline = stanza.Pipeline("id", processors="tokenize,mwt,pos,lemma", use_gpu=True)
 
     def fit(self, X, y=None):
         return self
@@ -26,4 +26,4 @@ class TokenizeMWTPOSLemma(BaseEstimator, TransformerMixin):
         if self.verbose > 0:
             print(f'{datetime.now().strftime("%Y-%m-%d %H:%M:%S")} INFO: TOKENIZE, MWT, POS, LEMMA')
 
-        return self.tokenizer.bulk_process(X)
+        return self.pipeline.bulk_process(X)
