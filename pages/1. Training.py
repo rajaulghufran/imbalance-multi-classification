@@ -90,7 +90,7 @@ def train(
         ),
         bool(categories) if targets_col_name != "Select a column" else True,
         bool(pos),
-        # bool(feature_attrs),
+        bool(feature_attrs),
         (
             not tfidfvectorizer_hyperparameters_df["ngram_range"].dropna().empty and
             not tfidfvectorizer_hyperparameters_df["min_df"].dropna().empty and
